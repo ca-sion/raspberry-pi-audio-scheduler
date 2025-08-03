@@ -6,20 +6,23 @@ import os
 from functools import wraps
 from flask_cors import CORS
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis .env au démarrage de l'application
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 # --- Configuration de l'environnement ---
-# Mettez True si vous êtes sur le Raspberry Pi, False si vous êtes en développement sur Mac
-IS_RASPBERRY_PI = False # <--- MODIFIEZ CETTE LIGNE !
-
-# Protection par mot de passe (simple, pour usage local)
-PASSWORD = "1950casion" 
+# Récupérer les variables depuis les variables d'environnement
+IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
+PASSWORD = os.getenv('PASSWORD', 'default_password')
+PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/app')
 
 # Chemins par défaut pour le Pi (si IS_RASPBERRY_PI est True)
 # Ces chemins correspondent à la structure du script de déploiement
-PI_PROJECT_ROOT = "/home/pi/pi_audio_player_app" # Assurez-vous que c'est le même chemin que RASPBERRY_PI_PROJECT_PATH dans deploy.sh
+PI_PROJECT_ROOT = "/home/pi/app" # Assurez-vous que c'est le même chemin que RASPBERRY_PI_PROJECT_PATH dans deploy.sh
 
 # --- Chemins des fichiers audio et logs ---
 if IS_RASPBERRY_PI:
@@ -80,6 +83,7 @@ def authenticate(func):
         return func(*args, **kwargs)
     return wrapper
 
+# --- Routes API ---
 @app.route('/play/<lang>', methods=['POST'])
 @authenticate
 def play_now(lang):

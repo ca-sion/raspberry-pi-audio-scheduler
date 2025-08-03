@@ -13,6 +13,8 @@ votre\_projet/
 ├── index.html
 ├── README.md
 ├── deploy.sh
+├── .env
+├── .env.example
 ├── audio/
 │   ├── long-fr.mp3
 │   ├── long-en.mp3
@@ -48,62 +50,42 @@ votre\_projet/
 
 ## 4\. Configuration Spécifique à l'Environnement
 
-C'est la partie la plus importante pour basculer entre Mac et Raspberry Pi et garantir la cohérence des chemins.
+La configuration de l'application (comme la détection de l'environnement Mac/Pi, le mot de passe de l'API et les chemins de base) est gérée via un fichier `.env`. Cette approche est plus sécurisée et flexible.
 
-### Fichiers `api.py` et `audio_player.py`
+1.  **Copiez** le fichier `.env.example` fourni à la racine de votre projet et renommez la copie en `.env`.
+2.  **Modifiez** le fichier `.env` avec vos valeurs spécifiques :
+    * **`IS_RASPBERRY_PI`** : Mettez `False` pour le développement local sur Mac, `True` pour le déploiement sur le Raspberry Pi (le script `deploy.sh` s'en occupera automatiquement pour le Pi).
+    * **`PASSWORD`** : Définissez le mot de passe souhaité pour l'API.
+    * **`PI_PROJECT_ROOT`** : Chemin absolu où l'application sera déployée sur le Raspberry Pi (doit correspondre à la variable dans `deploy.sh`).
+    * **`LOCAL_PROJECT_DIR`** : Le nom de votre dossier de projet local (utilisé par `deploy.sh`).
+    * **`RASPBERRY_PI_HOST`** et **`RASPBERRY_PI_USER`** : Informations de connexion SSH pour votre Pi.
 
-Ouvrez `api.py` et `audio_player.py` et modifiez les variables au début des fichiers comme suit. Ces modifications garantissent que les chemins d'accès aux fichiers audio et aux logs s'adaptent automatiquement à l'environnement.
+## 5\. Déploiement et Lancement sur Raspberry Pi (Automatisé avec `deploy.sh`)
 
-```python
-# Dans api.py et audio_player.py
+Le script `deploy.sh` automatise l'intégralité du processus de déploiement, y compris la création des dossiers, le transfert des fichiers, l'installation des dépendances Python et système, et la configuration des services `systemd`.
 
-IS_RASPBERRY_PI = False # <--- MODIFIEZ CETTE LIGNE !
-PI_PROJECT_ROOT = "/home/pi/raspberry-pi-audio-scheduler" 
-````
+### 5.1. Prérequis pour le script `deploy.sh`
 
-  * **`IS_RASPBERRY_PI = False` (pour Mac) :**
-      * Les fichiers audio seront cherchés dans `./audio/` (relatif au répertoire d'exécution du script).
-      * Les logs du planificateur seront écrits/lus dans `./temp_planner_log.log`.
-      * La lecture audio utilisera `afplay`.
-      * Le statut du planificateur et les actions de démarrage/arrêt seront simulés.
-  * **`IS_RASPBERRY_PI = True` (pour Raspberry Pi) :**
-      * Les fichiers audio seront cherchés dans `/home/pi/raspberry-pi-audio-scheduler/audio/`.
-      * Les logs du planificateur seront écrits/lus dans `/home/pi/logs/audio_player.log`.
-      * La lecture audio utilisera `mpv --ao=alsa`.
-      * Le statut du planificateur et les actions de démarrage/arrêt interrogeront/contrôleront les services `systemd` réels.
-
-## 5\. Déploiement et Lancement sur Raspberry Pi (Automatisé)
-
-Pour déployer ou mettre à jour votre application sur le Raspberry Pi, vous utiliserez le script `deploy.sh`.
-
-### Prérequis pour le script `deploy.sh` :
-
-1.  **Copiez** le contenu du script `deploy.sh` fourni dans un fichier nommé `deploy.sh` à la racine de votre projet (au même niveau que `api.py`).
-2.  **Rendez-le exécutable** : Ouvrez un terminal sur votre Mac, naviguez jusqu'au dossier parent de votre projet (par exemple, si votre projet est dans `/Users/votre_nom/projets/mon_app_audio`, naviguez jusqu'à `/Users/votre_nom/projets/`) et exécutez :
+1.  **Fichier `.env` configuré :** Assurez-vous d'avoir créé et configuré votre fichier `.env` à la racine de votre projet avec les bonnes valeurs pour `RASPBERRY_PI_HOST`, `RASPBERRY_PI_USER`, `PI_PROJECT_ROOT` et `LOCAL_PROJECT_DIR`.
+2.  **Rendre le script exécutable :** Ouvrez un terminal sur votre Mac, naviguez jusqu'au dossier parent de votre projet, et exécutez :
     ```bash
-    chmod +x mon_app_audio/deploy.sh
+    chmod +x votre_projet/deploy.sh
     ```
-    (Remplacez `mon_app_audio` par le nom réel de votre dossier de projet).
-3.  **Modifiez les variables de configuration** au début de `deploy.sh` :
-      * **`RASPBERRY_PI_HOST="<ADRESSE_IP_DU_PI_OU_HOSTNAME>"`** : Remplacez par l'adresse IP de votre Raspberry Pi (ex: `192.168.1.100`) ou son hostname (ex: `raspberrypi.local` si mDNS est activé).
-      * **`LOCAL_PROJECT_DIR="raspberry-pi-audio-scheduler"`** : **Très important \!** Remplacez `"raspberry-pi-audio-scheduler"` par le nom exact de votre dossier de projet local sur votre Mac.
-      * `RASPBERRY_PI_USER` et `RASPBERRY_PI_PROJECT_PATH` peuvent généralement rester par défaut pour un Pi neuf.
-4.  **Configurez SSH sans mot de passe** entre votre Mac et le Raspberry Pi. C'est essentiel pour que le script fonctionne sans interaction :
-      * Sur votre Mac, générez une paire de clés SSH (si vous n'en avez pas déjà une) :
+    (Remplacez `votre_projet` par le nom réel de votre dossier de projet).
+3.  **Configuration SSH sans mot de passe (CRITIQUE) :** C'est **indispensable** pour que le script `deploy.sh` puisse se connecter et exécuter des commandes sur votre Raspberry Pi sans intervention manuelle.
+    * **Générez une paire de clés SSH** sur votre machine locale (si vous n'en avez pas déjà une) :
         ```bash
         ssh-keygen -t rsa -b 4096
         ```
-        (Appuyez sur Entrée pour les options par défaut, laissez la passphrase vide pour l'automatisation).
-      * Copiez votre clé publique sur le Raspberry Pi (vous devrez entrer le mot de passe du Pi pour la *dernière fois*) :
+        (Appuyez sur Entrée pour les options par défaut, laissez la passphrase **vide** pour l'automatisation).
+    * **Copiez votre clé publique sur le Raspberry Pi** (vous devrez entrer le mot de passe du Pi pour la *dernière fois*) :
         ```bash
-        ssh-copy-id pi@<adresse_ip_du_pi>
+        ssh-copy-id ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}
         ```
-        Si la commande `ssh-copy-id` n'est pas disponible, vous pouvez le faire manuellement :
-        ```bash
-        cat ~/.ssh/id_rsa.pub | ssh pi@<adresse_ip_du_pi> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-        ```
+        Si la commande `ssh-copy-id` n'est pas disponible, suivez un tutoriel pour le faire manuellement (cela implique de copier le contenu de `~/.ssh/id_rsa.pub` dans `~/.ssh/authorized_keys` sur le Pi).
+    * Le script `deploy.sh` vérifiera que cette configuration est fonctionnelle.
 
-### Lancement du Déploiement :
+### 5.2. Lancement du Déploiement :
 
 1.  **Assurez-vous que votre projet local (`LOCAL_PROJECT_DIR`) est propre** et contient toutes les dernières modifications.
 2.  **Exécutez le script depuis le répertoire *parent* de votre projet** sur votre Mac :
@@ -112,14 +94,18 @@ Pour déployer ou mettre à jour votre application sur le Raspberry Pi, vous uti
     ./mon_app_audio/deploy.sh
     ```
     Le script va :
-      * Mettre à jour `IS_RASPBERRY_PI = True` dans vos fichiers locaux `api.py` et `audio_player.py`.
-      * Créer les répertoires nécessaires sur le Pi (`/home/pi/raspberry-pi-audio-scheduler/audio`, `/home/pi/logs`).
-      * Transférer l'intégralité de votre dossier de projet vers le Raspberry Pi.
-      * Installer les dépendances système (`mpv`, `python3-pip`, `python3-venv`).
-      * Créer un environnement virtuel sur le Pi et installer les dépendances Python (`Flask`, `Flask-Cors`).
-      * Créer les services `systemd` (`flask-api.service` et `audio-player.service`) avec les chemins corrects pointant vers l'environnement virtuel.
-      * Recharger `systemd`, activer et démarrer les services.
-      * Remettre `IS_RASPBERRY_PI = False` dans vos fichiers locaux sur Mac pour le développement.
+    * Lire votre `.env` local pour obtenir les configurations.
+    * Créer les répertoires nécessaires sur le Pi.
+    * Transférer l'intégralité de votre dossier de projet vers le Raspberry Pi.
+    * **Créer un fichier `.env` sur le Raspberry Pi** avec `IS_RASPBERRY_PI=True` et les autres configurations spécifiques au Pi.
+    * Installer les dépendances système et Python (`python-dotenv` inclus).
+    * Créer/mettre à jour les services `systemd`.
+    * Redémarrer les services.
+
+### 5.3. Accès à l'Interface Web et Débogage
+
+* Suivez les instructions de la section "Accès à l'Interface Web" dans le `README.md` actuel.
+* Pour le débogage, utilisez `journalctl` comme indiqué dans le `README.md` actuel.
 
 ### Accès à l'Interface Web
 
@@ -157,31 +143,26 @@ Remplacez `<adresse_ip_du_pi>` par l'adresse IP réelle de votre Raspberry Pi.
 
 Ces étapes sont à effectuer sur votre machine de développement (Mac).
 
-### Étape 1 : Configuration des Fichiers
+### 6.1. Configuration des Fichiers
 
-Ouvrez `api.py` et `audio_player.py` et assurez-vous que la variable `IS_RASPBERRY_PI` est définie sur `False` :
+Assurez-vous que votre fichier `.env` local à la racine de votre projet contient la ligne suivante :
 
 ```python
 IS_RASPBERRY_PI = False
 ```
 
-### Étape 2 : Installation des Dépendances
+### 6.2. Installation des Dépendances
 
-Naviguez dans le dossier de votre projet :
+Naviguez dans le dossier de votre projet et installez les dépendances :
 
 ```bash
 cd /chemin/vers/votre_projet/
-```
-
-Créez un environnement virtuel (si ce n'est pas déjà fait) et installez les dépendances :
-
-```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install Flask Flask-Cors
+pip install Flask Flask-Cors python-dotenv
 ```
 
-### Étape 3 : Lancement des Scripts
+### 6.3. Lancement des Scripts
 
 Ouvrez deux terminaux séparés, et dans chacun :
 

@@ -3,14 +3,15 @@ import os
 import time
 import subprocess
 from datetime import datetime, timedelta
+from dotenv import load_dotenv # <--- NOUVEAU !
+
+# Charger les variables d'environnement depuis .env au démarrage de l'application
+load_dotenv()
 
 # --- Configuration de l'environnement ---
-# Mettez True si vous êtes sur le Raspberry Pi, False si vous êtes en développement sur Mac
-IS_RASPBERRY_PI = False # <--- MODIFIEZ CETTE LIGNE !
-
-# Chemins par défaut pour le Pi (si IS_RASPBERRY_PI est True)
-# Ces chemins correspondent à la structure du script de déploiement
-PI_PROJECT_ROOT = "/home/pi/pi_audio_player_app" # Assurez-vous que c'est le même chemin que RASPBERRY_PI_PROJECT_PATH dans deploy.sh
+# Récupérer les variables depuis les variables d'environnement
+IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
+PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/pi_audio_player_app')
 
 # --- Chemins des fichiers audio et logs ---
 if IS_RASPBERRY_PI:
@@ -20,20 +21,20 @@ else: # Environnement de développement (Mac)
     AUDIO_BASE_DIR = os.path.join(os.getcwd(), "audio")
     PLANNER_LOG_FILE_PATH = os.path.join(os.getcwd(), "temp_planner_log.log")
 
-
 # Créez les dossiers audio et logs si inexistants
-os.makedirs(AUDIO_DIR, exist_ok=True) 
-os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+# Utilisez AUDIO_BASE_DIR et PLANNER_LOG_FILE_PATH qui sont désormais correctement définis
+os.makedirs(AUDIO_BASE_DIR, exist_ok=True)
+os.makedirs(os.path.dirname(PLANNER_LOG_FILE_PATH), exist_ok=True)
 
 
 AUDIO_FILES = {
-    "fr": os.path.join(AUDIO_DIR, "long-fr.mp3"),
-    "en": os.path.join(AUDIO_DIR, "long-en.mp3"),
-    "ar": os.path.join(AUDIO_DIR, "long-ar.mp3"),
-    "ti": os.path.join(AUDIO_DIR, "long-ti.m4a"),
-    "fa": os.path.join(AUDIO_DIR, "long-fa.mp3"),
-    "fc_sion-fr": os.path.join(AUDIO_DIR, "fc_sion-fr.mp3"),
-    "fc_sion-de": os.path.join(AUDIO_DIR, "fc_sion-de.mp3") 
+    "fr": os.path.join(AUDIO_BASE_DIR, "long-fr.mp3"),
+    "en": os.path.join(AUDIO_BASE_DIR, "long-en.mp3"),
+    "ar": os.path.join(AUDIO_BASE_DIR, "long-ar.mp3"),
+    "ti": os.path.join(AUDIO_BASE_DIR, "long-ti.m4a"),
+    "fa": os.path.join(AUDIO_BASE_DIR, "long-fa.mp3"),
+    "fc_sion-fr": os.path.join(AUDIO_BASE_DIR, "fc_sion-fr.mp3"),
+    "fc_sion-de": os.path.join(AUDIO_BASE_DIR, "fc_sion-de.mp3")
 }
 
 SCHEDULE = [
@@ -55,11 +56,11 @@ def log_planner_message(message):
     
     # Écrit dans le fichier de log
     try:
-        with open(LOG_FILE_PATH, "a") as f: 
+        with open(PLANNER_LOG_FILE_PATH, "a") as f: 
             f.write(log_entry + "\n")
     except IOError as e:
         # Afficher l'erreur si l'écriture du log échoue
-        print(f"[{timestamp}] [ERROR] Impossible d'écrire dans le fichier de log ({LOG_FILE_PATH}): {e}")
+        print(f"[{timestamp}] [ERROR] Impossible d'écrire dans le fichier de log ({PLANNER_LOG_FILE_PATH}): {e}")
     print(log_entry) # Continue d'afficher dans le terminal aussi
 
 def play_message(lang_code):
