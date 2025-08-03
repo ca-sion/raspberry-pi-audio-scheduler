@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrôle Audio Club Athlétisme Sion</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        button.stop-button { background-color: #dc3545; } 
+        button.stop-button:hover { background-color: #c82333; }
+        .control-group { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
+        .status { margin-top: 10px; font-weight: bold; }
+        input[type="password"] { padding: 8px; margin-bottom: 10px; width: 90%; border: 1px solid #ccc; border-radius: 4px; }
+        /* Style pour la zone de logs */
+        #logContainer { 
+            margin-top: 20px; 
+            border: 1px solid #ddd; 
+            background-color: #e9e9e9; 
+            padding: 10px; 
+            height: 200px; /* Hauteur fixe pour le défilement */
+            overflow-y: scroll; /* Active le défilement vertical */
+            font-family: monospace; 
+            font-size: 0.8em; 
+            color: #333; 
+        }
+        #logContainer p { margin: 0; padding: 2px 0; border-bottom: 1px dashed #ccc; }
+        #logContainer p:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Contrôle Audio Club Athlétisme Sion</h1>
+
+        <div class="control-group">
+            <h2>Authentification</h2>
+            <input type="password" id="passwordInput" placeholder="Entrez le mot de passe">
+            <button onclick="login()">Se connecter</button>
+            <div id="authStatus" class="status" style="color: red;">Déconnecté</div>
+        </div>
+
+        <div id="mainControls" style="display: none;">
+            <div class="control-group">
+                <h2>Lecture Manuelle</h2>
+                <p>Diffuser un message maintenant :</p>
+                <button onclick="playAudio('fr')">Français</button>
+                <button onclick="playAudio('en')">Anglais</button>
+                <button onclick="playAudio('ar')">Arabe</button>
+                <button onclick="playAudio('ti')">Tigrigna</button>
+                <button onclick="playAudio('fa')">Dari/Farsi</button>
+                <button onclick="playAudio('fc_sion-fr')">FC Sion (FR)</button>
+                <button onclick="playAudio('fc_sion-de')">FC Sion (DE)</button>
+                <div id="playStatus" class="status"></div>
+                
+                <hr style="margin: 15px 0;"> 
+                <button onclick="stopAudio()" class="stop-button">Arrêter la lecture en cours</button>
+                <div id="stopStatus" class="status"></div> 
+            </div>
+
+            <div class="control-group">
+                <h2>Contrôle du Planificateur Automatique</h2>
+                <p>Statut actuel : <span id="schedulerStatus">Chargement...</span></p>
+                <button onclick="toggleScheduler('start')">Activer Planificateur</button>
+                <button onclick="toggleScheduler('stop')">Désactiver Planificateur</button>
+                <div id="schedulerActionStatus" class="status"></div>
+            </div>
+
+            <div class="control-group">
+                <h2>Journal d'activités</h2>
+                <div id="logContainer">
+                    <p>Chargement des logs...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000'; 
+        let authToken = ''; 
+        let logIntervalId; // Pour stocker l'ID de l'intervalle de rafraîchissement des logs
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Pas de récupération de token ici car c'est un exemple simple.
+        });
+
+        async function login() {
+            const password = document.getElementById('passwordInput').value;
+            if (password === "1950casion") { 
+                authToken = password;
+                document.getElementById('authStatus').innerText = "Connecté";
+                document.getElementById('authStatus').style.color = "green";
+                document.getElementById('mainControls').style.display = 'block';
+                fetchStatusAll(); // Charger les statuts initiaux
+                startLogPolling(); // Démarrer le rafraîchissement des logs
+            } else {
+                document.getElementById('authStatus').innerText = "Mot de passe incorrect";
+                document.getElementById('authStatus').style.color = "red";
+                document.getElementById('mainControls').style.display = 'none'; 
+                stopLogPolling(); // Arrêter le rafraîchissement des logs si déconnecté
+            }
+        }
+
+        async function makeApiCall(endpoint, method, body = null) {
+            const headers = {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            };
+            try {
+                const response = await fetch(API_BASE_URL + endpoint, {
+                    method: method,
+                    headers: headers,
+                    body: body ? JSON.stringify(body) : null
+                });
+
+                if (!response.ok) { 
+                    if (response.status === 401) {
+                        alert("Accès non autorisé. Veuillez vous reconnecter.");
+                        document.getElementById('mainControls').style.display = 'none';
+                        document.getElementById('authStatus').innerText = "Déconnecté (session expirée ou non autorisée)";
+                        document.getElementById('authStatus').style.color = "red";
+                        stopLogPolling(); // Arrêter le rafraîchissement si non autorisé
+                    }
+                    const errorData = await response.json().catch(() => ({})); 
+                    console.error(`API Error: ${response.status} ${response.statusText}`, errorData);
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json(); 
+            } catch (error) {
+                console.error('Échec de l\'appel API:', error); 
+                // Ne pas alerter ici car les logs afficheront probablement l'erreur de connexion
+                return null; 
+            }
+        }
+
+        async function playAudio(lang) {
+            const statusDiv = document.getElementById('playStatus');
+            statusDiv.innerText = `Lecture de ${lang}...`; 
+            const result = await makeApiCall(`/play/${lang}`, 'POST');
+            if (result && result.status === "Playing") {
+                statusDiv.innerText = `Message en ${lang} diffusé.`;
+            } else {
+                statusDiv.innerText = `Erreur lors de la diffusion en ${lang}.`;
+            }
+            fetchStatusAll(); 
+        }
+
+        async function stopAudio() {
+            const statusDiv = document.getElementById('stopStatus');
+            statusDiv.innerText = `Demande d'arrêt...`;
+            const result = await makeApiCall(`/stop_audio`, 'POST');
+            if (result && result.status) {
+                statusDiv.innerText = `Statut : ${result.status}`;
+            } else {
+                statusDiv.innerText = `Erreur lors de l'arrêt.`;
+            }
+            fetchStatusAll(); 
+        }
+
+        async function fetchSchedulerStatus() {
+            const statusSpan = document.getElementById('schedulerStatus');
+            const result = await makeApiCall('/status', 'GET');
+            if (result) {
+                statusSpan.innerText = result.auto_player_running ? "Actif" : "Inactif";
+                statusSpan.style.color = result.auto_player_running ? "green" : "red";
+                const stopButton = document.querySelector('.stop-button');
+                if (result.manual_audio_playing) {
+                    stopButton.disabled = false;
+                } else {
+                    stopButton.disabled = true;
+                }
+            } else {
+                statusSpan.innerText = "Non disponible";
+                statusSpan.style.color = "gray";
+            }
+        }
+
+        async function toggleScheduler(action) {
+            const statusDiv = document.getElementById('schedulerActionStatus');
+            statusDiv.innerText = `Demande de ${action} du planificateur...`;
+            const result = await makeApiCall(`/auto_player/${action}`, 'POST');
+            if (result && result.status) {
+                statusDiv.innerText = result.status;
+                fetchStatusAll(); 
+            } else {
+                statusDiv.innerText = `Erreur lors de l'action ${action}.`;
+            }
+        }
+
+        async function fetchStatusAll() {
+            await fetchSchedulerStatus();
+            // Pas besoin d'appeler fetchLogs ici, car il est géré par un intervalle séparé
+        }
+
+        // --- NOUVEAU : Fonctions pour gérer le rafraîchissement des logs ---
+        async function fetchLogs() {
+            const logContainer = document.getElementById('logContainer');
+            const result = await makeApiCall('/logs', 'GET');
+            if (result && result.logs) {
+                logContainer.innerHTML = ''; // Vide le contenu existant
+                result.logs.forEach(log => {
+                    const p = document.createElement('p');
+                    p.textContent = log;
+                    logContainer.appendChild(p);
+                });
+                // Faire défiler vers le bas pour voir les dernières entrées
+                logContainer.scrollTop = logContainer.scrollHeight;
+            } else if (result === null) {
+                // Si makeApiCall retourne null (erreur de connexion), efface les logs
+                logContainer.innerHTML = '<p style="color: red;">Erreur de connexion aux logs. API non disponible ?</p>';
+            }
+        }
+
+        function startLogPolling() {
+            // Arrête tout intervalle précédent avant d'en démarrer un nouveau
+            if (logIntervalId) {
+                clearInterval(logIntervalId);
+            }
+            fetchLogs(); // Récupère les logs immédiatement au démarrage
+            logIntervalId = setInterval(fetchLogs, 3000); // Rafraîchit les logs toutes les 3 secondes
+        }
+
+        function stopLogPolling() {
+            if (logIntervalId) {
+                clearInterval(logIntervalId);
+                logIntervalId = null;
+            }
+        }
+    </script>
+</body>
+</html>
