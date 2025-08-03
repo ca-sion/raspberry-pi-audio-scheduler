@@ -17,14 +17,17 @@ IS_RASPBERRY_PI = False # <--- MODIFIEZ CETTE LIGNE !
 # Protection par mot de passe (simple, pour usage local)
 PASSWORD = "1950casion" 
 
+# Chemins par défaut pour le Pi (si IS_RASPBERRY_PI est True)
+# Ces chemins correspondent à la structure du script de déploiement
+PI_PROJECT_ROOT = "/home/pi/pi_audio_player_app" # Assurez-vous que c'est le même chemin que RASPBERRY_PI_PROJECT_PATH dans deploy.sh
+
 # --- Chemins des fichiers audio et logs ---
-# Définition des chemins en fonction de l'environnement
 if IS_RASPBERRY_PI:
-    AUDIO_BASE_DIR = "/home/pi/audio"
-    PLANNER_LOG_FILE_PATH = "/home/pi/logs/audio_player.log"
+    AUDIO_BASE_DIR = os.path.join(PI_PROJECT_ROOT, "audio")
+    PLANNER_LOG_FILE_PATH = os.path.join("/home/pi/logs", "audio_player.log") # Le dossier logs est directement dans /home/pi
 else: # Environnement de développement (Mac)
-    AUDIO_BASE_DIR = os.path.join(os.getcwd(), "audio") # Chemin absolu basé sur le répertoire courant pour le développement
-    PLANNER_LOG_FILE_PATH = os.path.join(os.getcwd(), "temp_planner_log.log") # Fichier de log temporaire pour le développement
+    AUDIO_BASE_DIR = os.path.join(os.getcwd(), "audio")
+    PLANNER_LOG_FILE_PATH = os.path.join(os.getcwd(), "temp_planner_log.log")
 
 # Assurez-vous que les répertoires nécessaires existent au démarrage
 os.makedirs(AUDIO_BASE_DIR, exist_ok=True)
