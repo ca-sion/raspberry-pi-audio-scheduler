@@ -1,4 +1,4 @@
-# api.py (Exemple simple avec Flask)
+# api.py
 from flask import Flask, request, jsonify
 import subprocess
 import threading
@@ -8,14 +8,26 @@ from flask_cors import CORS
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app) # Initialisez CORS pour votre application Flask. Par défaut, cela autorise toutes les origines.
+CORS(app)
 
 # Protection par mot de passe (simple, pour usage local)
-# Pensez à CHANGER ce mot de passe pour un usage en production !
 PASSWORD = "1950casion" 
 
+# --- Chemin du fichier de log du planificateur automatique ---
+PLANNER_LOG_FILE_PATH = "/home/pi/logs/audio_player.log" # Doit correspondre à celui dans audio_player.py
+# --- ATTENTION : Sur votre Mac, ce fichier n'existera pas forcément ou ne sera pas pertinent.
+# Vous pourriez vouloir un chemin temporaire pour le développement Mac si vous ne voulez pas d'erreur.
+# Par exemple:
+# PLANNER_LOG_FILE_PATH = "./temp_planner_log.log" # Pour le développement local sur Mac
+# if not os.path.exists(os.path.dirname(PLANNER_LOG_FILE_PATH)):
+#    os.makedirs(os.path.dirname(PLANNER_LOG_FILE_PATH), exist_ok=True)
+# if not os.path.exists(PLANNER_LOG_FILE_PATH):
+#     with open(PLANNER_LOG_FILE_PATH, 'w') as f:
+#         f.write("Fichier de log du planificateur initialisé (pour Mac).\n")
+
+
 AUDIO_FILES = {
-    "fr": "./audio/long-fr.mp3", # Utilisez un chemin relatif pour le développement local
+    "fr": "./audio/long-fr.mp3",
     "en": "./audio/long-en.mp3",
     "ar": "./audio/long-ar.mp3",
     "ti": "./audio/long-ti.m4a",
@@ -32,22 +44,21 @@ auto_player_running = True
 # Variable globale pour stocker le processus de lecture en cours
 # Initialisez-la à None
 current_audio_process = None 
-current_audio_thread = None # Pour stocker le thread de lecture (optionnel mais utile pour le suivi)
+current_audio_thread = None 
 
 app_logs = []
-MAX_LOG_ENTRIES = 50
+MAX_APP_LOG_ENTRIES = 50 # Limite pour les logs de l'API Flask
 
 def add_log(message):
-    """Ajoute un message avec un horodatage à la liste des logs."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] {message}"
+    log_entry = f"[{timestamp}] [API] {message}" # Ajout du préfixe [API]
     app_logs.append(log_entry)
-    if len(app_logs) > MAX_LOG_ENTRIES:
+    if len(app_logs) > MAX_APP_LOG_ENTRIES:
         app_logs.pop(0) # Supprime l'entrée la plus ancienne si la limite est atteinte
-    print(log_entry) # Continue d'afficher dans le terminal aussi
+    print(log_entry) 
 
 def authenticate(func):
-    @wraps(func) # Correctif crucial : copie les métadonnées de la fonction originale
+    @wraps(func)
     def wrapper(*args, **kwargs):
         # Vérifie si l'en-tête Authorization contient le mot de passe correct
         if request.headers.get('Authorization') != f'Bearer {PASSWORD}':
@@ -59,7 +70,7 @@ def authenticate(func):
 @app.route('/play/<lang>', methods=['POST'])
 @authenticate
 def play_now(lang):
-    global current_audio_process, current_audio_thread # Déclarez global pour modifier
+    global current_audio_process, current_audio_thread
     
     # Arrêtez toute lecture en cours avant d'en lancer une nouvelle
     if current_audio_process and current_audio_process.poll() is None: # Si un processus est actif
@@ -76,7 +87,6 @@ def play_now(lang):
     if file_path and os.path.exists(file_path):
         add_log(f"Tentative de lecture audio pour {lang} : {file_path}")
         
-        # Fonction pour la cible du thread qui lance la lecture
         def _play_audio_target(path):
             global current_audio_process
             try:
@@ -86,7 +96,7 @@ def play_now(lang):
                 # Pour omxplayer (léger sur le Pi) :
                 # current_audio_process = subprocess.Popen(["omxplayer", "-o", "local", path])
                 current_audio_process = subprocess.Popen(["afplay", path]) 
-                current_audio_process.wait() # Attend que la lecture se termine naturellement
+                current_audio_process.wait()
                 add_log(f"Lecture de {path} terminée.")
             except Exception as e:
                 add_log(f"Erreur lors de la lecture audio de {path}: {e}")
@@ -104,23 +114,42 @@ def play_now(lang):
     add_log(f"Erreur: Fichier audio non trouvé pour {lang} : {file_path}")
     return jsonify({"error": "File not found or language not supported"}), 404
 
-@app.route('/logs', methods=['GET'])
+# Route pour récupérer les logs de l'API Flask
+@app.route('/api_logs', methods=['GET']) # Renommée pour être plus spécifique
 @authenticate
-def get_logs():
+def get_api_logs():
     return jsonify({"logs": app_logs}), 200
+
+# --- NOUVEAU : Route pour récupérer les logs du planificateur ---
+@app.route('/planner_logs', methods=['GET'])
+@authenticate
+def get_planner_logs():
+    try:
+        with open(PLANNER_LOG_FILE_PATH, "r") as f:
+            # Lire les 50 dernières lignes pour éviter de surcharger
+            logs = f.readlines()
+            # Supprimer les éventuels caractères de nouvelle ligne
+            recent_logs = [line.strip() for line in logs[-MAX_APP_LOG_ENTRIES:]] 
+        return jsonify({"logs": recent_logs}), 200
+    except FileNotFoundError:
+        add_log(f"Erreur: Fichier de log du planificateur non trouvé à {PLANNER_LOG_FILE_PATH}")
+        return jsonify({"logs": [f"Erreur: Fichier de log du planificateur ({PLANNER_LOG_FILE_PATH}) non trouvé ou non accessible."]}) , 404
+    except Exception as e:
+        add_log(f"Erreur lors de la lecture du fichier de log du planificateur : {e}")
+        return jsonify({"logs": [f"Erreur lors de la lecture du log du planificateur : {e}"]}), 500
 
 
 @app.route('/stop_audio', methods=['POST'])
 @authenticate
 def stop_audio():
     global current_audio_process, current_audio_thread
-    if current_audio_process and current_audio_process.poll() is None: # Si un processus est actif
+    if current_audio_process and current_audio_process.poll() is None:
         add_log("Requête d'arrêt reçue. Arrêt de la lecture en cours.")
         try:
-            current_audio_process.terminate() # Envoie un signal de terminaison
-            current_audio_process.wait(timeout=1) # Attend un peu la terminaison
+            current_audio_process.terminate()
+            current_audio_process.wait(timeout=1)
         except subprocess.TimeoutExpired:
-            current_audio_process.kill() # Tue le processus si la terminaison ne marche pas
+            current_audio_process.kill()
         current_audio_process = None
         current_audio_thread = None
         return jsonify({"status": "Stopped"}), 200
@@ -145,7 +174,7 @@ def get_status():
     
     return jsonify({
         "auto_player_running": auto_player_running,
-        "manual_audio_playing": is_manual_audio_playing # Ajout du statut de lecture manuelle
+        "manual_audio_playing": is_manual_audio_playing
     }), 200
 
 @app.route('/auto_player/<action>', methods=['POST'])
@@ -164,9 +193,19 @@ def manage_auto_player(action):
         # subprocess.run(["sudo", "systemctl", "stop", "audio-player.service"])
         auto_player_running = False
         return jsonify({"status": "Auto player stopped"}), 200
+    add_log(f"Erreur: Action invalide pour auto-player : {action}")
     return jsonify({"error": "Invalid action"}), 400
 
 if __name__ == '__main__':
-    # Lance l'application Flask en mode debug pour le développement.
-    # Pour la production sur le Pi, utilisez Gunicorn/uWSGI avec Nginx.
+    add_log("API Flask démarrée.")
+    # Si vous êtes sur Mac et que vous voulez simuler le fichier de log du planificateur:
+    # try:
+    #     if not os.path.exists(os.path.dirname(PLANNER_LOG_FILE_PATH)):
+    #         os.makedirs(os.path.dirname(PLANNER_LOG_FILE_PATH), exist_ok=True)
+    #     if not os.path.exists(PLANNER_LOG_FILE_PATH):
+    #         with open(PLANNER_LOG_FILE_PATH, 'w') as f:
+    #             f.write("Fichier de log du planificateur initialisé (pour Mac).\n")
+    # except Exception as e:
+    #     add_log(f"Avertissement: Impossible de créer/initialiser le fichier de log du planificateur sur Mac: {e}")
+
     app.run(host='0.0.0.0', port=5000, debug=True)

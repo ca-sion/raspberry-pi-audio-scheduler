@@ -6,7 +6,7 @@
     <title>Contrôle Audio Club Athlétisme Sion</title>
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #333; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; }
         button:hover { background-color: #0056b3; }
@@ -15,20 +15,22 @@
         .control-group { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
         .status { margin-top: 10px; font-weight: bold; }
         input[type="password"] { padding: 8px; margin-bottom: 10px; width: 90%; border: 1px solid #ccc; border-radius: 4px; }
-        /* Style pour la zone de logs */
-        #logContainer { 
-            margin-top: 20px; 
+        
+        /* Styles pour les zones de logs */
+        .log-area { 
+            margin-top: 10px; 
             border: 1px solid #ddd; 
             background-color: #e9e9e9; 
             padding: 10px; 
-            height: 200px; /* Hauteur fixe pour le défilement */
+            height: 150px; /* Hauteur fixe pour le défilement */
             overflow-y: scroll; /* Active le défilement vertical */
             font-family: monospace; 
             font-size: 0.8em; 
             color: #333; 
         }
-        #logContainer p { margin: 0; padding: 2px 0; border-bottom: 1px dashed #ccc; }
-        #logContainer p:last-child { border-bottom: none; }
+        .log-area p { margin: 0; padding: 2px 0; border-bottom: 1px dashed #ccc; }
+        .log-area p:last-child { border-bottom: none; }
+        .log-area h3 { margin-top: 0; margin-bottom: 5px; color: #555; font-size: 1em;}
     </style>
 </head>
 <body>
@@ -69,9 +71,16 @@
             </div>
 
             <div class="control-group">
-                <h2>Journal d'activités</h2>
-                <div id="logContainer">
-                    <p>Chargement des logs...</p>
+                <h3>Journal des activités API</h3>
+                <div id="apiLogContainer" class="log-area">
+                    <p>Chargement des logs API...</p>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Journal des activités Planificateur</h3>
+                <div id="plannerLogContainer" class="log-area">
+                    <p>Chargement des logs du planificateur...</p>
                 </div>
             </div>
         </div>
@@ -80,7 +89,8 @@
     <script>
         const API_BASE_URL = 'http://localhost:5000'; 
         let authToken = ''; 
-        let logIntervalId; // Pour stocker l'ID de l'intervalle de rafraîchissement des logs
+        let logIntervalId; 
+        let plannerLogIntervalId; // Pour le rafraîchissement des logs du planificateur
 
         document.addEventListener('DOMContentLoaded', () => {
             // Pas de récupération de token ici car c'est un exemple simple.
@@ -93,13 +103,15 @@
                 document.getElementById('authStatus').innerText = "Connecté";
                 document.getElementById('authStatus').style.color = "green";
                 document.getElementById('mainControls').style.display = 'block';
-                fetchStatusAll(); // Charger les statuts initiaux
-                startLogPolling(); // Démarrer le rafraîchissement des logs
+                fetchStatusAll(); 
+                startLogPolling(); // Démarrer le rafraîchissement des logs API
+                startPlannerLogPolling(); // Démarrer le rafraîchissement des logs du planificateur
             } else {
                 document.getElementById('authStatus').innerText = "Mot de passe incorrect";
                 document.getElementById('authStatus').style.color = "red";
                 document.getElementById('mainControls').style.display = 'none'; 
-                stopLogPolling(); // Arrêter le rafraîchissement des logs si déconnecté
+                stopLogPolling(); 
+                stopPlannerLogPolling();
             }
         }
 
@@ -121,7 +133,8 @@
                         document.getElementById('mainControls').style.display = 'none';
                         document.getElementById('authStatus').innerText = "Déconnecté (session expirée ou non autorisée)";
                         document.getElementById('authStatus').style.color = "red";
-                        stopLogPolling(); // Arrêter le rafraîchissement si non autorisé
+                        stopLogPolling(); 
+                        stopPlannerLogPolling();
                     }
                     const errorData = await response.json().catch(() => ({})); 
                     console.error(`API Error: ${response.status} ${response.statusText}`, errorData);
@@ -130,7 +143,7 @@
                 return response.json(); 
             } catch (error) {
                 console.error('Échec de l\'appel API:', error); 
-                // Ne pas alerter ici car les logs afficheront probablement l'erreur de connexion
+                // Laisser les logs afficher l'erreur
                 return null; 
             }
         }
@@ -191,41 +204,67 @@
 
         async function fetchStatusAll() {
             await fetchSchedulerStatus();
-            // Pas besoin d'appeler fetchLogs ici, car il est géré par un intervalle séparé
+            // Les logs sont gérés par leurs propres intervalles
         }
 
-        // --- NOUVEAU : Fonctions pour gérer le rafraîchissement des logs ---
-        async function fetchLogs() {
-            const logContainer = document.getElementById('logContainer');
-            const result = await makeApiCall('/logs', 'GET');
-            if (result && result.logs) {
-                logContainer.innerHTML = ''; // Vide le contenu existant
-                result.logs.forEach(log => {
-                    const p = document.createElement('p');
-                    p.textContent = log;
-                    logContainer.appendChild(p);
-                });
-                // Faire défiler vers le bas pour voir les dernières entrées
-                logContainer.scrollTop = logContainer.scrollHeight;
-            } else if (result === null) {
-                // Si makeApiCall retourne null (erreur de connexion), efface les logs
-                logContainer.innerHTML = '<p style="color: red;">Erreur de connexion aux logs. API non disponible ?</p>';
-            }
+        // --- Fonctions pour gérer le rafraîchissement des logs de l'API ---
+        async function fetchApiLogs() {
+            const logContainer = document.getElementById('apiLogContainer');
+            const result = await makeApiCall('/api_logs', 'GET'); // Nouvelle route
+            updateLogContainer(logContainer, result);
         }
 
         function startLogPolling() {
-            // Arrête tout intervalle précédent avant d'en démarrer un nouveau
             if (logIntervalId) {
                 clearInterval(logIntervalId);
             }
-            fetchLogs(); // Récupère les logs immédiatement au démarrage
-            logIntervalId = setInterval(fetchLogs, 3000); // Rafraîchit les logs toutes les 3 secondes
+            fetchApiLogs(); 
+            logIntervalId = setInterval(fetchApiLogs, 3000); 
         }
 
         function stopLogPolling() {
             if (logIntervalId) {
                 clearInterval(logIntervalId);
                 logIntervalId = null;
+            }
+        }
+
+        // --- NOUVEAU : Fonctions pour gérer le rafraîchissement des logs du planificateur ---
+        async function fetchPlannerLogs() {
+            const logContainer = document.getElementById('plannerLogContainer');
+            const result = await makeApiCall('/planner_logs', 'GET'); // Nouvelle route
+            updateLogContainer(logContainer, result);
+        }
+
+        function startPlannerLogPolling() {
+            if (plannerLogIntervalId) {
+                clearInterval(plannerLogIntervalId);
+            }
+            fetchPlannerLogs();
+            plannerLogIntervalId = setInterval(fetchPlannerLogs, 3000);
+        }
+
+        function stopPlannerLogPolling() {
+            if (plannerLogIntervalId) {
+                clearInterval(plannerLogIntervalId);
+                plannerLogIntervalId = null;
+            }
+        }
+
+        // --- Fonction utilitaire pour mettre à jour les conteneurs de logs ---
+        function updateLogContainer(container, result) {
+            if (result && result.logs) {
+                container.innerHTML = ''; 
+                result.logs.forEach(log => {
+                    const p = document.createElement('p');
+                    p.textContent = log;
+                    container.appendChild(p);
+                });
+                container.scrollTop = container.scrollHeight;
+            } else if (result === null) {
+                container.innerHTML = '<p style="color: red;">Erreur de connexion. API non disponible ?</p>';
+            } else { // Cas où result n'est pas null mais pas de logs (ex: erreur 404/500 de l'API)
+                container.innerHTML = `<p style="color: red;">${result.error || 'Erreur inconnue lors de la récupération des logs.'}</p>`;
             }
         }
     </script>
