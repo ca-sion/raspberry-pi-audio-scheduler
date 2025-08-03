@@ -77,13 +77,48 @@ def add_log(message):
 def authenticate(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if request.headers.get('Authorization') != f'Bearer {PASSWORD}':
-            add_log("Accès non autorisé tenté.")
-            return jsonify({"error": "Unauthorized"}), 401
+        # Le token est simplement le mot de passe du .env pour cet exemple.
+        # En production, ce serait un token JWT ou un UUID généré.
+        expected_token = PASSWORD 
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            add_log("Accès non autorisé tenté : Pas d'en-tête d'autorisation.")
+            return jsonify({"error": "Unauthorized: Missing Authorization header"}), 401
+
+        try:
+            scheme, token = auth_header.split(None, 1) # Sépare "Bearer" du token
+        except ValueError:
+            add_log("Accès non autorisé tenté : Format d'en-tête non valide.")
+            return jsonify({"error": "Unauthorized: Invalid Authorization header format"}), 401
+
+        if scheme.lower() != 'bearer':
+            add_log(f"Accès non autorisé tenté : Schéma d'authentification invalide '{scheme}'.")
+            return jsonify({"error": "Unauthorized: Invalid authentication scheme"}), 401
+        
+        if token != expected_token:
+            add_log("Accès non autorisé tenté : Token invalide.")
+            return jsonify({"error": "Unauthorized: Invalid token"}), 401
+            
         return func(*args, **kwargs)
     return wrapper
 
-# --- Routes API ---
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    password_attempt = data.get('password')
+
+    if password_attempt == PASSWORD: # Utilisez la variable PASSWORD chargée depuis .env
+        # Pour cet exemple, le token est simplement le mot de passe lui-même.
+        # Dans une application réelle, générez un JWT ou un token opaque et stockez-le en toute sécurité.
+        token = PASSWORD 
+        add_log("Connexion réussie.")
+        return jsonify({"message": "Authentication successful", "token": token}), 200
+    else:
+        add_log("Tentative de connexion échouée : Mot de passe incorrect.")
+        return jsonify({"error": "Invalid credentials"}), 401
+
+# --- Routes API (le reste reste inchangé, mais utilise maintenant le décorateur authenticate) ---
 @app.route('/play/<lang>', methods=['POST'])
 @authenticate
 def play_now(lang):
@@ -107,23 +142,17 @@ def play_now(lang):
             global current_audio_process
             try:
                 if IS_RASPBERRY_PI:
-                    # Sur le Raspberry Pi, utilisez 'mpv' (ou 'omxplayer').
-                    # mpv est recommandé car il gère mieux les différents formats et ALSA.
-                    # Assurez-vous que mpv est installé sur votre Pi : sudo apt install mpv
                     current_audio_process = subprocess.Popen(["mpv", "--ao=alsa", path])
                 else:
-                    # Sur Mac, utilisez 'afplay' qui est intégré à macOS.
                     current_audio_process = subprocess.Popen(["afplay", path]) 
                 current_audio_process.wait()
                 add_log(f"Lecture de {path} terminée.")
             except Exception as e:
-                # Gérer les erreurs de lecture audio
                 if isinstance(e, FileNotFoundError):
                     add_log(f"Erreur: Lecteur audio non trouvé. Sur Pi, vérifiez l'installation de 'mpv'. Sur Mac, 'afplay' devrait être présent. Erreur: {e}")
                 else:
                     add_log(f"Erreur lors de la lecture audio de {path}: {e}")
             finally:
-                # Réinitialise current_audio_process une fois la lecture terminée (ou si erreur)
                 if current_audio_process and current_audio_process.poll() is not None:
                     current_audio_process = None 
 
@@ -145,9 +174,7 @@ def get_api_logs():
 def get_planner_logs():
     try:
         with open(PLANNER_LOG_FILE_PATH, "r") as f:
-            # Lire les 50 dernières lignes pour éviter de surcharger
             logs = f.readlines()
-            # Supprimer les éventuels caractères de nouvelle ligne
             recent_logs = [line.strip() for line in logs[-MAX_APP_LOG_ENTRIES:]] 
         return jsonify({"logs": recent_logs}), 200
     except FileNotFoundError:
@@ -181,25 +208,20 @@ def stop_audio():
 def get_status():
     global auto_player_running
     if IS_RASPBERRY_PI:
-        # Sur le Pi, interroger le statut réel du service systemd :
         try:
-            # 'systemctl is-active' retourne "active" si le service est en cours d'exécution, sinon "inactive" ou "failed"
             result = subprocess.run(["systemctl", "is-active", "audio-player.service"], capture_output=True, text=True, check=True)
             auto_player_running = ("active" in result.stdout.strip())
             add_log(f"Statut réel du service audio-player : {result.stdout.strip()}")
         except FileNotFoundError:
             add_log("Erreur: 'systemctl' n'est pas trouvé. Êtes-vous sûr d'être sur un système Linux avec systemd ?")
-            auto_player_running = False # En cas d'erreur grave, on considère qu'il n'est pas actif
+            auto_player_running = False 
         except subprocess.CalledProcessError as e:
-            # Cela peut arriver si le service n'existe pas ou est en erreur
             add_log(f"Le service 'audio-player.service' n'est pas actif ou a échoué. Erreur: {e.stderr.strip()}")
             auto_player_running = False
         except Exception as e:
             add_log(f"Erreur inattendue lors de la vérification du statut systemd : {e}")
             auto_player_running = False
-    # else: auto_player_running est déjà une variable simulée pour Mac (définie globalement)
 
-    # Vérifie si une lecture manuelle est en cours
     is_manual_audio_playing = False
     if current_audio_process and current_audio_process.poll() is None:
         is_manual_audio_playing = True
@@ -218,7 +240,7 @@ def manage_auto_player(action):
             add_log("Démarrage réel du service audio-player sur Raspberry Pi.")
             try:
                 subprocess.run(["sudo", "systemctl", "start", "audio-player.service"], check=True)
-                auto_player_running = True # Mettre à jour la variable globale après succès
+                auto_player_running = True 
                 return jsonify({"status": "Auto player started on Pi"}), 200
             except FileNotFoundError:
                 add_log("Erreur: 'systemctl' non trouvé. Assurez-vous que systemd est disponible.")
@@ -238,7 +260,7 @@ def manage_auto_player(action):
             add_log("Arrêt réel du service audio-player sur Raspberry Pi.")
             try:
                 subprocess.run(["sudo", "systemctl", "stop", "audio-player.service"], check=True)
-                auto_player_running = False # Mettre à jour la variable globale après succès
+                auto_player_running = False 
                 return jsonify({"status": "Auto player stopped on Pi"}), 200
             except FileNotFoundError:
                 add_log("Erreur: 'systemctl' non trouvé. Assurez-vous que systemd est disponible.")
@@ -258,9 +280,6 @@ def manage_auto_player(action):
 
 if __name__ == '__main__':
     add_log("API Flask démarrée.")
-    # Exécute la création des dossiers et l'initialisation du fichier de log du planificateur
-    # uniquement si nous ne sommes PAS sur le Raspberry Pi.
-    # Ceci assure que les chemins sont corrects pour l'environnement de dev.
     if not IS_RASPBERRY_PI:
         os.makedirs(AUDIO_BASE_DIR, exist_ok=True)
         os.makedirs(os.path.dirname(PLANNER_LOG_FILE_PATH), exist_ok=True)

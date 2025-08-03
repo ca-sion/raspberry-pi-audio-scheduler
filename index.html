@@ -12,6 +12,8 @@
         button:hover { background-color: #0056b3; }
         button.stop-button { background-color: #dc3545; } 
         button.stop-button:hover { background-color: #c82333; }
+        button.logout-button { background-color: #6c757d; }
+        button.logout-button:hover { background-color: #5a6268; }
         .control-group { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
         .status { margin-top: 10px; font-weight: bold; }
         input[type="password"] { padding: 8px; margin-bottom: 10px; width: 90%; border: 1px solid #ccc; border-radius: 4px; }
@@ -41,6 +43,7 @@
             <h2>Authentification</h2>
             <input type="password" id="passwordInput" placeholder="Entrez le mot de passe">
             <button onclick="login()">Se connecter</button>
+            <button onclick="logout()" class="logout-button" id="logoutButton" style="display: none;">Se déconnecter</button>
             <div id="authStatus" class="status" style="color: red;">Déconnecté</div>
         </div>
 
@@ -90,34 +93,101 @@
         const API_BASE_URL = 'http://localhost:5000'; 
         let authToken = ''; 
         let logIntervalId; 
-        let plannerLogIntervalId; // Pour le rafraîchissement des logs du planificateur
+        let plannerLogIntervalId; 
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Pas de récupération de token ici car c'est un exemple simple.
+            // Tenter de récupérer le token en session au chargement de la page
+            const storedToken = sessionStorage.getItem('authToken');
+            if (storedToken) {
+                authToken = storedToken;
+                setLoggedInState(true);
+                fetchStatusAll(); 
+                startLogPolling(); 
+                startPlannerLogPolling(); 
+            } else {
+                setLoggedInState(false);
+            }
         });
 
-        async function login() {
-            const password = document.getElementById('passwordInput').value;
-            if (password === "1950casion") { 
-                authToken = password;
-                document.getElementById('authStatus').innerText = "Connecté";
-                document.getElementById('authStatus').style.color = "green";
-                document.getElementById('mainControls').style.display = 'block';
-                fetchStatusAll(); 
-                startLogPolling(); // Démarrer le rafraîchissement des logs API
-                startPlannerLogPolling(); // Démarrer le rafraîchissement des logs du planificateur
+        function setLoggedInState(isLoggedIn) {
+            const authStatus = document.getElementById('authStatus');
+            const mainControls = document.getElementById('mainControls');
+            const logoutButton = document.getElementById('logoutButton');
+
+            if (isLoggedIn) {
+                authStatus.innerText = "Connecté";
+                authStatus.style.color = "green";
+                mainControls.style.display = 'block';
+                logoutButton.style.display = 'inline-block';
             } else {
-                document.getElementById('authStatus').innerText = "Mot de passe incorrect";
-                document.getElementById('authStatus').style.color = "red";
-                document.getElementById('mainControls').style.display = 'none'; 
-                stopLogPolling(); 
-                stopPlannerLogPolling();
+                authStatus.innerText = "Déconnecté";
+                authStatus.style.color = "red";
+                mainControls.style.display = 'none';
+                logoutButton.style.display = 'none';
+                // Nettoyer les logs et statuts quand déconnecté
+                document.getElementById('playStatus').innerText = '';
+                document.getElementById('stopStatus').innerText = '';
+                document.getElementById('schedulerStatus').innerText = 'Chargement...';
+                document.getElementById('schedulerActionStatus').innerText = '';
+                document.getElementById('apiLogContainer').innerHTML = '<p>Logs API non disponibles (déconnecté)</p>';
+                document.getElementById('plannerLogContainer').innerHTML = '<p>Logs Planificateur non disponibles (déconnecté)</p>';
             }
         }
 
+        async function login() {
+            const password = document.getElementById('passwordInput').value;
+            try {
+                const response = await fetch(API_BASE_URL + '/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password: password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    sessionStorage.setItem('authToken', authToken); // Stocke le token en session
+                    setLoggedInState(true);
+                    fetchStatusAll(); 
+                    startLogPolling(); 
+                    startPlannerLogPolling(); 
+                    document.getElementById('passwordInput').value = ''; // Efface le champ de mot de passe
+                } else {
+                    const errorData = await response.json();
+                    document.getElementById('authStatus').innerText = `Erreur de connexion : ${errorData.error}`;
+                    document.getElementById('authStatus').style.color = "red";
+                    setLoggedInState(false);
+                }
+            } catch (error) {
+                console.error('Échec de la connexion:', error);
+                document.getElementById('authStatus').innerText = "Erreur de connexion au serveur.";
+                document.getElementById('authStatus').style.color = "red";
+                setLoggedInState(false);
+            }
+        }
+
+        function logout() {
+            authToken = ''; // Efface le token
+            sessionStorage.removeItem('authToken'); // Supprime le token du sessionStorage
+            stopLogPolling(); 
+            stopPlannerLogPolling();
+            setLoggedInState(false);
+            document.getElementById('passwordInput').value = ''; // Efface le champ de mot de passe
+        }
+
         async function makeApiCall(endpoint, method, body = null) {
+            if (!authToken) {
+                alert("Vous n'êtes pas connecté ou votre session a expiré. Veuillez vous reconnecter.");
+                setLoggedInState(false);
+                stopLogPolling();
+                stopPlannerLogPolling();
+                return null;
+            }
+
             const headers = {
-                'Authorization': `Bearer ${authToken}`,
+                'Authorization': `Bearer ${authToken}`, // Utilise le token de session
                 'Content-Type': 'application/json'
             };
             try {
@@ -130,11 +200,7 @@
                 if (!response.ok) { 
                     if (response.status === 401) {
                         alert("Accès non autorisé. Veuillez vous reconnecter.");
-                        document.getElementById('mainControls').style.display = 'none';
-                        document.getElementById('authStatus').innerText = "Déconnecté (session expirée ou non autorisée)";
-                        document.getElementById('authStatus').style.color = "red";
-                        stopLogPolling(); 
-                        stopPlannerLogPolling();
+                        logout(); // Déconnecte l'utilisateur si le token est invalide
                     }
                     const errorData = await response.json().catch(() => ({})); 
                     console.error(`API Error: ${response.status} ${response.statusText}`, errorData);
@@ -143,7 +209,7 @@
                 return response.json(); 
             } catch (error) {
                 console.error('Échec de l\'appel API:', error); 
-                // Laisser les logs afficher l'erreur
+                // Ne pas alerter ici, laisser les fonctions appelantes gérer l'affichage de l'erreur
                 return null; 
             }
         }
@@ -204,13 +270,11 @@
 
         async function fetchStatusAll() {
             await fetchSchedulerStatus();
-            // Les logs sont gérés par leurs propres intervalles
         }
 
-        // --- Fonctions pour gérer le rafraîchissement des logs de l'API ---
         async function fetchApiLogs() {
             const logContainer = document.getElementById('apiLogContainer');
-            const result = await makeApiCall('/api_logs', 'GET'); // Nouvelle route
+            const result = await makeApiCall('/api_logs', 'GET'); 
             updateLogContainer(logContainer, result);
         }
 
@@ -229,10 +293,9 @@
             }
         }
 
-        // --- NOUVEAU : Fonctions pour gérer le rafraîchissement des logs du planificateur ---
         async function fetchPlannerLogs() {
             const logContainer = document.getElementById('plannerLogContainer');
-            const result = await makeApiCall('/planner_logs', 'GET'); // Nouvelle route
+            const result = await makeApiCall('/planner_logs', 'GET'); 
             updateLogContainer(logContainer, result);
         }
 
@@ -251,7 +314,6 @@
             }
         }
 
-        // --- Fonction utilitaire pour mettre à jour les conteneurs de logs ---
         function updateLogContainer(container, result) {
             if (result && result.logs) {
                 container.innerHTML = ''; 
@@ -262,8 +324,8 @@
                 });
                 container.scrollTop = container.scrollHeight;
             } else if (result === null) {
-                container.innerHTML = '<p style="color: red;">Erreur de connexion. API non disponible ?</p>';
-            } else { // Cas où result n'est pas null mais pas de logs (ex: erreur 404/500 de l'API)
+                container.innerHTML = '<p style="color: red;">Erreur de connexion ou session expirée.</p>';
+            } else { 
                 container.innerHTML = `<p style="color: red;">${result.error || 'Erreur inconnue lors de la récupération des logs.'}</p>`;
             }
         }
