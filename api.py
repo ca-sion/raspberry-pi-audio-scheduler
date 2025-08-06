@@ -20,10 +20,6 @@ IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
 PASSWORD = os.getenv('PASSWORD', 'default_password')
 PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/app')
 
-# Chemins par défaut pour le Pi (si IS_RASPBERRY_PI est True)
-# Ces chemins correspondent à la structure du script de déploiement
-PI_PROJECT_ROOT = "/home/pi/app" # Assurez-vous que c'est le même chemin que RASPBERRY_PI_PROJECT_PATH dans deploy.sh
-
 # --- Chemins des fichiers audio et logs ---
 if IS_RASPBERRY_PI:
     AUDIO_BASE_DIR = os.path.join(PI_PROJECT_ROOT, "audio")

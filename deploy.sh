@@ -49,7 +49,7 @@ fi
 # --- Configuration du Déploiement ---
 RASPBERRY_PI_HOST="${RASPBERRY_PI_HOST:-}"
 RASPBERRY_PI_USER="${RASPBERRY_PI_USER:-pi}"
-PI_PROJECT_ROOT="${PI_PROJECT_ROOT:-/home/${RASPBERRY_PI_USER}/$(basename "$LOCAL_PROJECT_DIR")}"
+PI_PROJECT_ROOT="${PI_PROJECT_ROOT:-/home/${RASPBERRY_PI_USER}/$(basename "$(pwd)")}"
 FLASK_SERVICE_NAME="flask-api.service"
 AUDIO_PLAYER_SERVICE_NAME="audio-player.service"
 AP_SERVICE_NAME="configure-ap.service"

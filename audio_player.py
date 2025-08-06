@@ -11,7 +11,7 @@ load_dotenv()
 # --- Configuration de l'environnement ---
 # Récupérer les variables depuis les variables d'environnement
 IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
-PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/pi_audio_player_app')
+PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/app')
 
 # --- Chemins des fichiers audio et logs ---
 if IS_RASPBERRY_PI:

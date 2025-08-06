@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/sudo /home/pi/raspberry-pi-audio-scheduler/config_ap.sh
+ExecStart=/usr/bin/sudo /home/pi/app/config_ap.sh
 StandardOutput=journal
 StandardError=journal
 RemainAfterExit=yes
