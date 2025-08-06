@@ -2,6 +2,14 @@
 
 Ce guide explique comment déployer l'application de lecteur audio sur un Raspberry Pi 4 ou 5, ainsi que comment la développer et la tester sur un Mac.
 
+### 0. Prérequis
+
+Pour que le déploiement fonctionne correctement, assurez-vous d'avoir les éléments suivants configurés sur votre Raspberry Pi :
+- **SSH activé** : vous pouvez le faire via `sudo raspi-config`.
+- **Authentification par clé publique SSH** : pour un déploiement sans mot de passe, générez une paire de clés SSH sur votre machine locale et copiez-la sur le Raspberry Pi (`ssh-copy-id pi@raspberrypi.local`).
+- **Python 3** : Assurez-vous que Python 3 est installé.
+- **Droits sudo** : L'utilisateur de déploiement (`pi` par défaut) doit avoir les droits sudo pour installer le service.
+
 ## 1\. Structure du Projet
 
 Assurez-vous que votre projet a la structure suivante :
@@ -50,15 +58,16 @@ votre\_projet/
 
 ## 4\. Configuration Spécifique à l'Environnement
 
-La configuration de l'application (comme la détection de l'environnement Mac/Pi, le mot de passe de l'API et les chemins de base) est gérée via un fichier `.env`. Cette approche est plus sécurisée et flexible.
+La configuration de l'application est gérée via un fichier `.env`.
 
-1.  **Copiez** le fichier `.env.example` fourni à la racine de votre projet et renommez la copie en `.env`.
+1.  **Copiez** le fichier `.env.example` à la racine de votre projet et renommez-le en `.env`.
 2.  **Modifiez** le fichier `.env` avec vos valeurs spécifiques :
-    * **`IS_RASPBERRY_PI`** : Mettez `False` pour le développement local sur Mac, `True` pour le déploiement sur le Raspberry Pi (le script `deploy.sh` s'en occupera automatiquement pour le Pi).
+    * **`IS_RASPBERRY_PI`** : Mettez `False` pour le développement local sur Mac. Pour le déploiement sur le Raspberry Pi, le script `deploy.sh` s'assurera que l'environnement d'exécution de l'application est bien configuré sur `True`. Vous n'avez rien à changer dans ce fichier pour le déploiement.
     * **`PASSWORD`** : Définissez le mot de passe souhaité pour l'API.
-    * **`PI_PROJECT_ROOT`** : Chemin absolu où l'application sera déployée sur le Raspberry Pi (doit correspondre à la variable dans `deploy.sh`).
-    * **`LOCAL_PROJECT_DIR`** : Le nom de votre dossier de projet local (utilisé par `deploy.sh`).
-    * **`RASPBERRY_PI_HOST`** et **`RASPBERRY_PI_USER`** : Informations de connexion SSH pour votre Pi.
+    * **`PI_PROJECT_ROOT`** : Chemin absolu où l'application sera déployée sur le Raspberry Pi (ex: `/home/pi/app`).
+    * **`PI_HOST`** et **`PI_USER`** : Informations de connexion SSH pour votre Pi.
+    * **`AP_SSID`** et **`AP_WIFI_PASSWORD`** : Nom et mot de passe pour le point d'accès Wi-Fi créé par le Raspberry Pi.
+    
 
 ## 5\. Déploiement et Lancement sur Raspberry Pi (Automatisé avec `deploy.sh`)
 

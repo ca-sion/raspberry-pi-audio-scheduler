@@ -90,7 +90,7 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:5000'; 
+        const API_BASE_URL = window.location.origin; // ou http://localhost:5000
         let authToken = ''; 
         let logIntervalId; 
         let plannerLogIntervalId; 

@@ -1,16 +1,14 @@
 #!/bin/bash
 
-# ==============================================================================
+# =============================================================================
 # Script de Déploiement et Mise à Jour pour Raspberry Pi
-# ==============================================================================
+# =============================================================================
 # Ce script automatise le transfert des fichiers, l'installation des dépendances,
 # et la configuration/redémarrage des services systemd sur un Raspberry Pi.
 # Il utilise les variables d'environnement définies dans un fichier .env local.
 #
-# À exécuter depuis votre machine de développement (Mac) dans le dossier PARENT
-# de votre répertoire de projet (par exemple, si votre projet est dans
-# /home/user/my_app, exécutez le script depuis /home/user/).
-# ==============================================================================
+# À exécuter depuis le dossier racine de votre projet (là où se trouve deploy.sh).
+# =============================================================================
 
 # --- Configuration du Script ---
 set -e
@@ -27,160 +25,110 @@ if [ ! -f "$LOCAL_ENV_FILE" ]; then
     exit 1
 fi
 
-eval $(grep -v '^#' "$LOCAL_ENV_FILE" | grep -v '^[[:space:]]*$' | awk -F'=' '{print "export " $1 "=\"" (gensub(/"/, "\\\"", $2, "g")) "\""}')
+# Utilisation de awk pour garantir que les valeurs avec espaces ou caractères spéciaux sont correctement exportées
+eval $(grep -v '^#' "$LOCAL_ENV_FILE" | grep -v '^[[:space:]]*$' | awk -F'=' '{
+  # Gère les lignes qui ne contiennent pas de signe '=' (par exemple, des commentaires ou des lignes vides)
+  if (NF > 1) {
+    # Construit la commande export en échappant correctement les guillemets et les caractères spéciaux
+    sub(/^[^=]*=/, "")
+    gsub(/"/, "\\\"")
+    print "export " $1 "=\"\"" gensub(/\"/, "\\\"\"", "g", $2) "\"\""
+  } else {
+    print "export " $1 "=\"\""
+  }
+}')
 
 # --- Vérification que les variables essentielles du .env sont chargées ---
-if [ -z "${LOCAL_PROJECT_DIR+x}" ]; then
-    echo "ERREUR: La variable LOCAL_PROJECT_DIR n'est pas définie dans votre fichier .env."
-    exit 1
-fi
-if [ -z "${PASSWORD+x}" ]; then
-    echo "AVERTISSEMENT: La variable PASSWORD n'est pas définie dans votre fichier .env. Le Pi aura un mot de passe par défaut."
-    PASSWORD_FOR_PI="default_secure_password"
-else
-    PASSWORD_FOR_PI="$PASSWORD"
-fi
-if [ -z "${AP_WIFI_PASSWORD+x}" ]; then
-    echo "ERREUR: La variable AP_WIFI_PASSWORD n'est pas définie dans votre fichier .env."
-    echo "Veuillez la configurer pour le réseau Wi-Fi du Pi."
-    exit 1
-fi
+if [ -z "${PI_HOST+x}" ]; then echo "ERREUR: La variable PI_HOST n'a pas été trouvée dans le fichier .env."; exit 1; fi
+if [ -z "${PI_USER+x}" ]; then echo "ERREUR: La variable PI_USER n'a pas été trouvée dans le fichier .env."; exit 1; fi
+if [ -z "${PI_PROJECT_ROOT+x}" ]; then echo "ERREUR: La variable PI_PROJECT_ROOT n'a pas été trouvée dans le fichier .env."; exit 1; fi
+if [ -z "${AP_SSID+x}" ]; then echo "ERREUR: La variable AP_SSID n'a pas été trouvée dans le fichier .env."; exit 1; fi
+if [ -z "${AP_WIFI_PASSWORD+x}" ]; then echo "ERREUR: La variable AP_WIFI_PASSWORD n'a pas été trouvée dans le fichier .env."; exit 1; fi
 
-# --- Configuration du Déploiement ---
-RASPBERRY_PI_HOST="${RASPBERRY_PI_HOST:-}"
-RASPBERRY_PI_USER="${RASPBERRY_PI_USER:-pi}"
-PI_PROJECT_ROOT="${PI_PROJECT_ROOT:-/home/${RASPBERRY_PI_USER}/$(basename "$(pwd)")}"
-FLASK_SERVICE_NAME="flask-api.service"
-AUDIO_PLAYER_SERVICE_NAME="audio-player.service"
-AP_SERVICE_NAME="configure-ap.service"
 
-# --- Dépendances Python à installer ---
-PYTHON_DEPS="Flask Flask-Cors python-dotenv"
+# --- Variables de configuration du projet ---
+LOCAL_PROJECT_DIR=$(pwd)
+RASPBERRY_PI_USER="${PI_USER}"
+RASPBERRY_PI_HOST="${PI_HOST}"
+PYTHON_DEPS="flask flask-cors python-dotenv"
+FLASK_SERVICE_NAME="pi-audio-api"
+AUDIO_PLAYER_SERVICE_NAME="pi-audio-player"
+AP_SERVICE_NAME="configure-ap"
 
-# --- Dépendances Système (paquets apt) ---
-SYSTEM_DEPS="mpv python3-pip python3-venv hostapd dnsmasq"
 
-# --- Vérification des Prérequis Locaux ---
-echo "--- Vérification des prérequis locaux ---"
-if ! command -v scp &> /dev/null; then
-    echo "ERREUR: 'scp' non trouvé. Assurez-vous d'avoir OpenSSH client installé."
-    exit 1
-fi
-
-if ! command -v ssh &> /dev/null; then
-    echo "ERREUR: 'ssh' non trouvé. Assurez-vous d'avoir OpenSSH client installé."
-    exit 1
-fi
-
-if [ -z "$RASPBERRY_PI_HOST" ]; then
-    echo "ERREUR: La variable RASPBERRY_PI_HOST n'est pas définie."
-    echo "Veuillez la configurer dans votre fichier .env (ex: RASPBERRY_PI_HOST=\"192.168.1.1\")."
-    exit 1
-fi
-
-if [ ! -d "$LOCAL_PROJECT_DIR" ]; then
-    echo "ERREUR: Le répertoire local du projet '$LOCAL_PROJECT_DIR' n'existe pas ou n'est pas le répertoire courant."
-    exit 1
-fi
-
-echo "--- VÉRIFICATION SSH SANS MOT DE PASSE ---"
-ssh -o BatchMode=yes -o ConnectTimeout=5 "${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}" "exit"
-if [ $? -ne 0 ]; then
-    echo "ERREUR: Impossible d'établir une connexion SSH sans mot de passe vers ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}."
-    echo "Veuillez configurer SSH sans mot de passe avant de continuer."
-    exit 1
-fi
-echo "Connexion SSH sans mot de passe vérifiée avec succès."
-
-# --- Fonctions Utilitaires ---
-
-ssh_exec() {
-    echo "Exécution SSH: $@"
-    ssh "${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}" "$@"
+# --- Fonctions utilitaires ---
+function ssh_exec() {
+    ssh "$RASPBERRY_PI_USER@$RASPBERRY_PI_HOST" "$@"
     if [ $? -ne 0 ]; then
-        echo "ERREUR: Échec de l'exécution de la commande SSH: $*"
-        exit 1
+      echo "Erreur: Échec de la commande SSH. Sortie."
+      exit 1
     fi
 }
 
-scp_copy() {
-    LOCAL_PATH=$1
-    REMOTE_PATH=$2
-    echo "Transfert SCP: ${LOCAL_PATH} vers ${RASPBERRY_PI_HOST}:${REMOTE_PATH}"
-    scp -r "$LOCAL_PATH" "${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${REMOTE_PATH}"
-    if [ $? -ne 0 ]; then
-        echo "ERREUR: Échec du transfert SCP: $LOCAL_PATH vers $REMOTE_PATH"
-        exit 1
-    fi
-}
-
-# Fonction pour créer et configurer un service systemd
-create_systemd_service() {
+function create_systemd_service() {
     SERVICE_NAME=$1
     DESCRIPTION=$2
-    EXEC_START_FILE=$3
-    DEPENDENCY_SERVICE="${4:-}" # Service dont dépend celui-ci (optionnel)
-    
-    UNIT_SECTION="[Unit]\nDescription=${DESCRIPTION}\nAfter=network.target ${DEPENDENCY_SERVICE}"
-    SERVICE_SECTION="[Service]\nUser=${RASPBERRY_PI_USER}\nWorkingDirectory=${PI_PROJECT_ROOT}\nExecStart=${PI_PROJECT_ROOT}/venv/bin/python3 ${EXEC_START_FILE}\nRestart=always\nStandardOutput=journal\nStandardError=journal"
-    INSTALL_SECTION="[Install]\nWantedBy=multi-user.target"
-    
-    SERVICE_TEMPLATE=$(printf "${UNIT_SECTION}\n\n${SERVICE_SECTION}\n\n${INSTALL_SECTION}")
-    
-    echo "--- Création/Mise à jour du service systemd: ${SERVICE_NAME} ---"
-    ssh_exec "echo -e '${SERVICE_TEMPLATE}' | sudo tee /etc/systemd/system/${SERVICE_NAME}"
+    PYTHON_SCRIPT=$3
+    AFTER_SERVICE=$4
+
+    echo "   -> Création/Mise à jour du service Systemd pour ${SERVICE_NAME}..."
+    ssh_exec "sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<EOF
+[Unit]
+Description=${DESCRIPTION}
+After=${AFTER_SERVICE}.service
+
+[Service]
+ExecStart=${PI_PROJECT_ROOT}/venv/bin/python3 ${PI_PROJECT_ROOT}/${PYTHON_SCRIPT}
+WorkingDirectory=${PI_PROJECT_ROOT}
+Restart=always
+User=${RASPBERRY_PI_USER}
+Environment=IS_RASPBERRY_PI=True
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"
+
     ssh_exec "sudo systemctl daemon-reload"
     ssh_exec "sudo systemctl enable ${SERVICE_NAME}"
     ssh_exec "sudo systemctl restart ${SERVICE_NAME}"
-    echo "Service ${SERVICE_NAME} redémarré avec succès."
 }
 
-# --- Début du Déploiement ---
-echo ""
-echo "==================================================================="
-echo " DÉPLOIEMENT DE L'APPLICATION AUDIO SUR RASPBERRY PI"
-echo " Hôte cible : ${RASPBERRY_PI_HOST}"
-echo " Projet local : ${LOCAL_PROJECT_DIR}"
-echo " Chemin distant : ${PI_PROJECT_ROOT}"
-echo "==================================================================="
-echo ""
+# --- Déploiement ---
 
-# 1. Création des répertoires distants
-echo "--- 1. Création des répertoires distants ---"
-ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/audio"
-ssh_exec "mkdir -p /home/${RASPBERRY_PI_USER}/logs"
-echo "   Répertoires créés/vérifiés."
+echo "--- Démarrage du déploiement vers ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST} ---"
 
-# 2. Transfert des fichiers du projet
-echo "--- 2. Transfert des fichiers du projet ---"
-scp_copy "${LOCAL_PROJECT_DIR}" "$(dirname ${PI_PROJECT_ROOT})"
-echo "   Fichiers du projet transférés."
+# 1. Créer les dossiers de destination sur le Raspberry Pi
+echo "--- 1. Création des dossiers de destination ---"
+ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/etc ${PI_PROJECT_ROOT}/audio ${PI_PROJECT_ROOT}/logs"
 
-# 3. Création du fichier .env sur le Raspberry Pi
-echo "--- 3. Création du fichier .env sur le Raspberry Pi ---"
-SSH_CREATE_ENV_COMMAND=$(cat <<EOF
-echo "IS_RASPBERRY_PI=True" > ${PI_PROJECT_ROOT}/.env
-echo "PASSWORD=${PASSWORD_FOR_PI}" >> ${PI_PROJECT_ROOT}/.env
-echo "PI_PROJECT_ROOT=${PI_PROJECT_ROOT}" >> ${PI_PROJECT_ROOT}/.env
-echo "AP_SSID=raspberrypi-audio" >> ${PI_PROJECT_ROOT}/.env
-echo "AP_PASSWORD=${AP_WIFI_PASSWORD}" >> ${PI_PROJECT_ROOT}/.env
-EOF
-)
-ssh_exec "${SSH_CREATE_ENV_COMMAND}"
-echo "   Fichier .env créé sur le Pi avec la configuration appropriée."
+# 2. Copier les fichiers essentiels du projet
+echo "--- 2. Copie des fichiers du projet ---"
+scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/*.html ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
+if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers. Sortie."; exit 1; fi
 
-# 4. Installation des dépendances système et Python
-echo "--- 4. Installation des dépendances système (${SYSTEM_DEPS}) ---"
-ssh_exec "sudo apt update && sudo apt install -y ${SYSTEM_DEPS}"
-echo "   Dépendances système installées/mises à jour."
+# 3. Copier les scripts de configuration
+echo "--- 3. Copie des scripts de configuration ---"
+scp ${LOCAL_PROJECT_DIR}/config_ap.sh ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
+if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie de config_ap.sh. Sortie."; exit 1; fi
 
-# 5. Configuration et Démarrage du Point d'Accès Wi-Fi
-echo "--- 5. Configuration du point d'accès Wi-Fi ---"
-ssh_exec "export AP_SSID='raspberrypi-audio' && export AP_PASSWORD='${AP_WIFI_PASSWORD}' && sudo ${PI_PROJECT_ROOT}/config_ap.sh"
+# 4. Copier le fichier de service pour le point d'accès
+echo "--- 4. Copie du service systemd pour le point d'accès ---"
+scp ${LOCAL_PROJECT_DIR}/configure-ap.service ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/etc/
+if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie de configure-ap.service. Sortie."; exit 1; fi
+
+# 5. Installation du lecteur audio (mpv)
+echo "--- 5. Installation du lecteur audio mpv ---"
+ssh_exec "sudo apt-get update && sudo apt-get install -y mpv"
+
+# 6. Configuration du point d'accès et installation de ses services
+echo "--- 6. Configuration du point d'accès Wi-Fi (hostapd, dnsmasq) ---"
+# Utilisation de 'AP_PASSWORD' qui est attendu par 'config_ap.sh', en lui passant la valeur de 'AP_WIFI_PASSWORD'
+ssh_exec "export AP_SSID='${AP_SSID}' && export AP_PASSWORD='${AP_WIFI_PASSWORD}' && sudo ${PI_PROJECT_ROOT}/config_ap.sh"
 echo "   Point d'accès configuré avec succès."
 
-# 6. Installation des dépendances Python (${PYTHON_DEPS}) dans un environnement virtuel
-echo "--- 6. Installation des dépendances Python (${PYTHON_DEPS}) dans un environnement virtuel ---"
+# 7. Installation des dépendances Python dans un environnement virtuel
+echo "--- 7. Installation des dépendances Python (${PYTHON_DEPS}) ---"
 ssh_exec "
     cd ${PI_PROJECT_ROOT} && \
     python3 -m venv venv && \
@@ -190,19 +138,27 @@ ssh_exec "
 "
 echo "   Dépendances Python installées dans l'environnement virtuel."
 
-# 7. Création et redémarrage des services Systemd
+# 8. Création et redémarrage des services Systemd
+echo "--- 8. Création et redémarrage des services Systemd ---"
 create_systemd_service "${FLASK_SERVICE_NAME}" "Flask API for Audio Player" "api.py" "${AP_SERVICE_NAME}"
-create_systemd_service "${AUDIO_PLAYER_SERVICE_NAME}" "Audio Player Scheduler" "audio_player.py" "${AP_SERVICE_NAME}"
-echo "--- Services Flask et Audio Player créés/mis à jour ---"
+create_systemd_service "${AUDIO_PLAYER_SERVICE_NAME}" "Audio Player Scheduler" "audio_player.py" "${FLASK_SERVICE_NAME}"
+echo "   Services Flask et Audio Player créés/mis à jour."
+
+# 9. Nettoyage et finalisation
+echo "--- 9. Nettoyage et finalisation ---"
+ssh_exec "sudo chmod 700 ${PI_PROJECT_ROOT}/config_ap.sh"
+ssh_exec "sudo mv ${PI_PROJECT_ROOT}/etc/configure-ap.service /etc/systemd/system/${AP_SERVICE_NAME}.service"
+ssh_exec "sudo systemctl daemon-reload"
+ssh_exec "sudo systemctl enable ${AP_SERVICE_NAME}"
+ssh_exec "sudo systemctl start ${AP_SERVICE_NAME}"
+echo "   Service de configuration du point d'accès démarré."
 
 echo ""
 echo "==================================================================="
-echo " DÉPLOIEMENT TERMINÉ AVEC SUCCÈS !"
+echo "           DÉPLOIEMENT TERMINÉ AVEC SUCCÈS ! 🎉"
 echo "==================================================================="
 echo "Accédez à l'interface via : http://${RASPBERRY_PI_HOST}:5000/index.html"
 echo "Pour vérifier les logs sur le Pi (via SSH) :"
-echo "  journalctl -u ${FLASK_SERVICE_NAME} -f"
-echo "  journalctl -u ${AUDIO_PLAYER_SERVICE_NAME} -f"
-echo ""
-echo "NOTE : Assurez-vous que votre fichier .env local a IS_RASPBERRY_PI=False pour le développement sur Mac."
-echo ""
+echo "  - Service API : journalctl -u ${FLASK_SERVICE_NAME} -f"
+echo "  - Service planificateur : journalctl -u ${AUDIO_PLAYER_SERVICE_NAME} -f"
+echo "  - Service point d'accès : journalctl -u ${AP_SERVICE_NAME} -f"

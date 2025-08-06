@@ -1,8 +1,12 @@
 [Unit]
 Description=Configure Raspberry Pi Wi-Fi as Access Point
+# S'assure que le service démarre après le réseau,
+# ce qui est nécessaire pour l'activation du point d'accès.
 After=network.target
+Wants=network.target
 
 [Service]
+# Exécute le script pour configurer le point d'accès
 Type=oneshot
 ExecStart=/usr/bin/sudo /home/pi/app/config_ap.sh
 StandardOutput=journal
@@ -10,4 +14,5 @@ StandardError=journal
 RemainAfterExit=yes
 
 [Install]
+# Installe le service pour qu'il soit démarré par systemd
 WantedBy=multi-user.target
