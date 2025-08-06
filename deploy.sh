@@ -25,6 +25,12 @@ if [ ! -f "$LOCAL_ENV_FILE" ]; then
     exit 1
 fi
 
+# --- S'assurer que le répertoire audio existe localement
+if [ ! -d "${LOCAL_PROJECT_DIR}/audio" ]; then
+    echo "ATTENTION: Le dossier 'audio' n'existe pas. Création d'un dossier vide."
+    mkdir -p "${LOCAL_PROJECT_DIR}/audio"
+fi
+
 # Utilisation de awk pour garantir que les valeurs avec espaces ou caractères spéciaux sont correctement exportées
 eval $(grep -v '^#' "$LOCAL_ENV_FILE" | grep -v '^[[:space:]]*$' | awk -F'=' '{
   # Gère les lignes qui ne contiennent pas de signe '=' (par exemple, des commentaires ou des lignes vides)
@@ -75,7 +81,7 @@ function create_systemd_service() {
     ssh_exec "sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<EOF
 [Unit]
 Description=${DESCRIPTION}
-After=${AFTER_SERVICE}.service
+After=${AFTER_SERVICE}
 
 [Service]
 ExecStart=${PI_PROJECT_ROOT}/venv/bin/python3 ${PI_PROJECT_ROOT}/${PYTHON_SCRIPT}
@@ -83,6 +89,7 @@ WorkingDirectory=${PI_PROJECT_ROOT}
 Restart=always
 User=${RASPBERRY_PI_USER}
 Environment=IS_RASPBERRY_PI=True
+Environment=FLASK_APP=${PI_PROJECT_ROOT}/api.py
 
 [Install]
 WantedBy=multi-user.target

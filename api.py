@@ -23,7 +23,7 @@ PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/app')
 # --- Chemins des fichiers audio et logs ---
 if IS_RASPBERRY_PI:
     AUDIO_BASE_DIR = os.path.join(PI_PROJECT_ROOT, "audio")
-    PLANNER_LOG_FILE_PATH = os.path.join("/home/pi/logs", "audio_player.log") # Le dossier logs est directement dans /home/pi
+    PLANNER_LOG_FILE_PATH = os.path.join(PI_PROJECT_ROOT, "logs", "audio_player.log")
 else: # Environnement de développement (Mac)
     AUDIO_BASE_DIR = os.path.join(os.getcwd(), "audio")
     PLANNER_LOG_FILE_PATH = os.path.join(os.getcwd(), "temp_planner_log.log")
