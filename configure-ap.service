@@ -1,0 +1,13 @@
+[Unit]
+Description=Configure Raspberry Pi Wi-Fi as Access Point
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sudo /home/pi/raspberry-pi-audio-scheduler/config_ap.sh
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
