@@ -120,7 +120,7 @@ Le script `deploy.sh` automatise l'intégralité du processus de déploiement, y
 
 Une fois le déploiement terminé, ouvrez votre navigateur web (sur n'importe quel appareil de votre réseau) et accédez à l'adresse IP de votre Raspberry Pi, suivi du port de l'API (par défaut 5000) :
 
-`http://<adresse_ip_du_pi>:5000/index.html`
+`http://<adresse_ip_du_pi>:5000`
 
 Remplacez `<adresse_ip_du_pi>` par l'adresse IP réelle de votre Raspberry Pi.
 
@@ -193,7 +193,7 @@ Ouvrez deux terminaux séparés, et dans chacun :
 
 Ouvrez votre navigateur web et accédez à l'interface locale :
 
-`http://localhost:5000/index.html`
+`http://localhost:5000`
 
 ### Débogage sur Mac
 

@@ -99,6 +99,10 @@ def authenticate(func):
         return func(*args, **kwargs)
     return wrapper
 
+@app.route('/')
+def home():
+    return app.send_static_file('index.html')
+
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
