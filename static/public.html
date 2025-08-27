@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrôle audio CA Sion</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+        // Configuration de Tailwind pour les couleurs personnalisées
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-green': 'rgb(74, 222, 128)', // Vert pour démarrer
+                        'brand-red': 'rgb(239, 68, 68)', // Rouge pour arrêter
+                        'brand-yellow': 'rgb(250, 204, 21)', // Jaune pour le statut
+                        'brand-blue': 'rgb(59, 130, 246)', // Bleu pour le timer
+                    }
+                }
+            }
+        }
+
+        // Script pour gérer le mode clair/sombre du système
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    <style>
+        /* Styles de base pour le mode clair */
+        .glass-container {
+            background: rgb(255 255 255 / 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgb(0 0 0 / 0.1);
+        }
+
+        /* Styles pour le mode sombre */
+        .dark .glass-container {
+            background: rgb(255 255 255 / 0.08);
+            border: 1px solid rgb(255 255 255 / 0.1);
+        }
+
+        /* Transition pour un changement de mode fluide */
+        body {
+            transition: background-color 0.5s ease;
+        }
+        .glass-container {
+            transition: background 0.5s ease, border-color 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-200 p-4 md:p-8 flex items-center justify-center min-h-screen">
+    <div class="container mx-auto max-w-4xl p-6 glass-container rounded-3xl shadow-xl dark:shadow-2xl space-y-8">
+        <header class="text-center mb-8">
+            <h1 class="text-xl md:text-2xl font-extrabold text-gray-800 dark:text-white tracking-wide">Contrôle audio - CA Sion 🎧</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Gérez la diffusion des annonces audio.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <section class="p-6 rounded-2xl glass-container shadow-lg space-y-2">
+                <h2 class="text-xl font-bold text-gray-700 dark:text-white flex items-center gap-2">
+                    Boucle de lecture
+                </h2>
+                <div class="space-y-4">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <label for="pauseDuration" class="text-gray-600 dark:text-gray-300 min-w-[150px]">Durée de la pause:</label>
+                        <select id="pauseDuration" class="w-full flex-1 bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white p-3 rounded-lg border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue transition duration-300">
+                            <option value="1">1 minutes</option>
+                            <option value="2">2 minutes</option>
+                            <option value="5">5 minutes</option>
+                            <option selected value="10">10 minutes</option>
+                            <option value="15">15 minutes</option>
+                            <option value="20">20 minutes</option>
+                            <option value="30">30 minutes</option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-wrap gap-4 justify-center sm:justify-start">
+                        <button id="startButton" class="flex-1 min-w-[150px] bg-brand-green hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed dark:disabled:bg-gray-600">
+                            Démarrer la lecture ▶️
+                        </button>
+                        <button id="stopButton" disabled class="flex-1 min-w-[150px] bg-brand-red hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed dark:disabled:bg-gray-600">
+                            Arrêter ⏹️
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                    <p class="text-sm">
+                        <span class="font-bold text-gray-500 dark:text-gray-400">Statut:</span>
+                        <span id="status" class="text-purple-600 dark:text-brand-yellow ml-1">En attente</span>
+                    </p>
+                    <p class="text-sm mt-1">
+                        <span class="font-bold text-gray-500 dark:text-gray-400">Timer:</span>
+                        <span id="timer" class="text-brand-blue ml-1">--:--</span>
+                    </p>
+                </div>
+                <audio id="audioPlayer" preload="auto" class="hidden"></audio>
+            </section>
+
+            <section class="p-6 rounded-2xl glass-container shadow-lg space-y-4">
+                <h2 class="text-xl font-bold text-gray-700 dark:text-white mb-4">
+                    Messages longs par langue
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">Français</figcaption>
+                        <audio controls class="w-full" src="../audio/long-fr.mp3"></audio>
+                    </figure>
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">Anglais</figcaption>
+                        <audio controls class="w-full" src="../audio/long-en.mp3"></audio>
+                    </figure>
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">Arabe</figcaption>
+                        <audio controls class="w-full" src="../audio/long-ar.mp3"></audio>
+                    </figure>
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">Tigrigna</figcaption>
+                        <audio controls class="w-full" src="../audio/long-ti.m4a"></audio>
+                    </figure>
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">Dari/Farsi</figcaption>
+                        <audio controls class="w-full" src="../audio/long-fa.mp3"></audio>
+                    </figure>
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">FC Sion (FR)</figcaption>
+                        <audio controls class="w-full" src="../audio/fc_sion-fr.mp3"></audio>
+                    </figure>
+                    <figure class="flex flex-col space-y-2 bg-gray-200 dark:bg-gray-800 p-4 rounded-xl border border-gray-300 dark:border-gray-700">
+                        <figcaption class="text-lg font-semibold text-gray-600 dark:text-gray-300">FC Sion (DE)</figcaption>
+                        <audio controls class="w-full" src="../audio/fc_sion-de.mp3"></audio>
+                    </figure>
+                </div>
+            </section>
+        </main>
+
+        <section class="p-6 rounded-2xl glass-container shadow-lg">
+            <h2 class="text-xl font-bold text-gray-700 dark:text-white mb-4">
+                Journal 📝
+            </h2>
+            <div id="logs" class="bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 p-4 rounded-xl border border-gray-300 dark:border-gray-700 h-64 overflow-y-scroll space-y-2 font-mono text-sm">
+                </div>
+        </section>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startButton = document.getElementById('startButton');
+            const stopButton = document.getElementById('stopButton');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const logsDiv = document.getElementById('logs');
+            const statusSpan = document.getElementById('status');
+            const timerSpan = document.getElementById('timer');
+            const pauseDurationSelect = document.getElementById('pauseDuration');
+            
+            const files = [
+                '../audio/long-fr.mp3',
+                '../audio/long-en.mp3',
+                '../audio/long-ti.m4a'
+            ];
+
+            let currentFileIndex = 0;
+            let isPlaying = false;
+            let timeoutId = null;
+            let intervalId = null;
+
+            // Fonction pour ajouter un message de log et gérer le nombre d'éléments
+            const addLog = (message) => {
+                console.log(message);
+                const logEntry = document.createElement('p');
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                logsDiv.appendChild(logEntry);
+                
+                // Vérifie si le nombre d'éléments dépasse 50
+                const maxLogs = 50;
+                if (logsDiv.children.length > maxLogs) {
+                    // Supprime le plus ancien (le premier enfant)
+                    logsDiv.removeChild(logsDiv.children[0]);
+                }
+                
+                logsDiv.scrollTop = logsDiv.scrollHeight; // Fait défiler vers le bas
+            };
+
+            // Fonction pour mettre à jour le timer
+            const updateTimer = (secondsRemaining) => {
+                const minutes = Math.floor(secondsRemaining / 60);
+                const seconds = secondsRemaining % 60;
+                timerSpan.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            };
+
+            // Fonction pour jouer le prochain fichier
+            const playNextFile = () => {
+                if (!isPlaying) {
+                    addLog("Lecture annulée.");
+                    return;
+                }
+
+                if (currentFileIndex < files.length) {
+                    audioPlayer.src = files[currentFileIndex];
+                    audioPlayer.play().catch(error => addLog(`Erreur de lecture de ${files[currentFileIndex]}: ${error}`));
+                    statusSpan.textContent = `Lecture de ${files[currentFileIndex]} (${currentFileIndex + 1}/${files.length})`;
+                    addLog(`Démarrage de la lecture de ${files[currentFileIndex]}`);
+                    currentFileIndex++;
+                } else {
+                    addLog('Tous les fichiers ont été joués. Démarrage de la pause.');
+                    startPause();
+                }
+            };
+
+            // Fonction pour gérer la pause
+            const startPause = () => {
+                const pauseMinutes = parseInt(pauseDurationSelect.value, 10);
+                const totalSeconds = pauseMinutes * 60;
+                let secondsRemaining = totalSeconds;
+
+                statusSpan.textContent = `En pause pour ${pauseMinutes} minutes`;
+                updateTimer(secondsRemaining);
+                addLog(`La pause a commencé pour ${pauseMinutes} minutes.`);
+                
+                intervalId = setInterval(() => {
+                    secondsRemaining--;
+                    updateTimer(secondsRemaining);
+                    if (secondsRemaining <= 0) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                        addLog('Fin de la pause. Redémarrage de la lecture.');
+                        currentFileIndex = 0;
+                        playNextFile();
+                    }
+                }, 1000);
+            };
+
+            // Fonction pour arrêter complètement la boucle
+            const stopLoop = () => {
+                isPlaying = false;
+                audioPlayer.pause();
+                audioPlayer.src = '';
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+                statusSpan.textContent = "Arrêté";
+                timerSpan.textContent = "--:--";
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                addLog("Boucle arrêtée par l'utilisateur.");
+            };
+
+            // Événement déclenché à la fin de chaque lecture
+            audioPlayer.addEventListener('ended', playNextFile);
+
+            // Événement sur le clic du bouton de démarrage
+            startButton.addEventListener('click', () => {
+                isPlaying = true;
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                addLog('Démarrage de la boucle...');
+                playNextFile();
+            });
+
+            // Événement sur le clic du bouton d'arrêt
+            stopButton.addEventListener('click', stopLoop);
+        });
+    </script>
+</body>
+</html>
