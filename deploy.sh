@@ -34,30 +34,20 @@ if [ ! -d "${LOCAL_PROJECT_DIR}/audio" ]; then
     mkdir -p "${LOCAL_PROJECT_DIR}/audio"
 fi
 
-# Utilisation de awk pour garantir que les valeurs avec espaces ou caractères spéciaux sont correctement exportées
-eval $(grep -v '^#' "$LOCAL_ENV_FILE" | grep -v '^[[:space:]]*$' | awk -F'=' '{
-  # Gère les lignes qui ne contiennent pas de signe '=' (par exemple, des commentaires ou des lignes vides)
-  if (NF > 1) {
-    # Construit la commande export en échappant correctement les guillemets et les caractères spéciaux
-    sub(/^[^=]*=/, "")
-    gsub(/"/, "\\\"")
-    print "export " $1 "=\"\"" gensub(/\"/, "\\\"\"", "g", $2) "\"\""
-  } else {
-    print "export " $1 "=\"\""
-  }
-}')
+# --- Chargement des variables d'environnement depuis .env de manière portable ---
+set -a # Exporte automatiquement toutes les variables qui suivent
+. "$LOCAL_ENV_FILE" # Charge les variables du fichier .env
+set +a # Arrête l'exportation automatique
 
 # --- Vérification que les variables essentielles du .env sont chargées ---
-if [ -z "${PI_HOST+x}" ]; then echo "ERREUR: La variable PI_HOST n'a pas été trouvée dans le fichier .env."; exit 1; fi
-if [ -z "${PI_USER+x}" ]; then echo "ERREUR: La variable PI_USER n'a pas été trouvée dans le fichier .env."; exit 1; fi
+if [ -z "${RASPBERRY_PI_HOST+x}" ]; then echo "ERREUR: La variable RASPBERRY_PI_HOST n'a pas été trouvée dans le fichier .env."; exit 1; fi
+if [ -z "${RASPBERRY_PI_USER+x}" ]; then echo "ERREUR: La variable RASPBERRY_PI_USER n'a pas été trouvée dans le fichier .env."; exit 1; fi
 if [ -z "${PI_PROJECT_ROOT+x}" ]; then echo "ERREUR: La variable PI_PROJECT_ROOT n'a pas été trouvée dans le fichier .env."; exit 1; fi
 if [ -z "${AP_SSID+x}" ]; then echo "ERREUR: La variable AP_SSID n'a pas été trouvée dans le fichier .env."; exit 1; fi
 if [ -z "${AP_WIFI_PASSWORD+x}" ]; then echo "ERREUR: La variable AP_WIFI_PASSWORD n'a pas été trouvée dans le fichier .env."; exit 1; fi
 
 
 # --- Variables de configuration du projet ---
-RASPBERRY_PI_USER="${PI_USER}"
-RASPBERRY_PI_HOST="${PI_HOST}"
 PYTHON_DEPS="flask flask-cors python-dotenv"
 FLASK_SERVICE_NAME="pi-audio-api"
 AUDIO_PLAYER_SERVICE_NAME="pi-audio-player"

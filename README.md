@@ -65,7 +65,7 @@ La configuration de l'application est gérée via un fichier `.env`.
     * **`IS_RASPBERRY_PI`** : Mettez `False` pour le développement local sur Mac. Pour le déploiement sur le Raspberry Pi, le script `deploy.sh` s'assurera que l'environnement d'exécution de l'application est bien configuré sur `True`. Vous n'avez rien à changer dans ce fichier pour le déploiement.
     * **`PASSWORD`** : Définissez le mot de passe souhaité pour l'API.
     * **`PI_PROJECT_ROOT`** : Chemin absolu où l'application sera déployée sur le Raspberry Pi (ex: `/home/pi/app`).
-    * **`PI_HOST`** et **`PI_USER`** : Informations de connexion SSH pour votre Pi.
+    * **`RASPBERRY_PI_HOST`** et **`RASPBERRY_PI_USER`** : Informations de connexion SSH pour votre Pi.
     * **`AP_SSID`** et **`AP_WIFI_PASSWORD`** : Nom et mot de passe pour le point d'accès Wi-Fi créé par le Raspberry Pi.
     
 ### 4.1. Configuration du Périphérique Audio (Optionnel)
