@@ -39,6 +39,10 @@ set -a # Exporte automatiquement toutes les variables qui suivent
 . "$LOCAL_ENV_FILE" # Charge les variables du fichier .env
 set +a # Arrête l'exportation automatique
 
+# --- Assurer que les variables AP_DHCP_START et AP_DHCP_END sont définies, avec des valeurs par défaut si non présentes dans .env ---
+AP_DHCP_START=${AP_DHCP_START:-192.168.1.100}
+AP_DHCP_END=${AP_DHCP_END:-192.168.1.200}
+
 # --- Vérification que les variables essentielles du .env sont chargées ---
 if [ -z "${RASPBERRY_PI_HOST+x}" ]; then echo "ERREUR: La variable RASPBERRY_PI_HOST n'a pas été trouvée dans le fichier .env."; exit 1; fi
 if [ -z "${RASPBERRY_PI_USER+x}" ]; then echo "ERREUR: La variable RASPBERRY_PI_USER n'a pas été trouvée dans le fichier .env."; exit 1; fi
@@ -138,7 +142,8 @@ ssh_exec "sudo alsactl store"
 # 6. Configuration du point d'accès et installation de ses services
 echo "--- 6. Configuration du point d'accès Wi-Fi (hostapd, dnsmasq) ---"
 # Utilisation de 'AP_PASSWORD' qui est attendu par 'config_ap.sh', en lui passant la valeur de 'AP_WIFI_PASSWORD'
-ssh_exec "export AP_SSID='${AP_SSID}' && export AP_PASSWORD='${AP_WIFI_PASSWORD}' && sudo ${PI_PROJECT_ROOT}/config_ap.sh"
+ssh_exec "sudo sh -c 'AP_SSID=\"${AP_SSID}\" AP_PASSWORD=\"${AP_WIFI_PASSWORD}\" AP_DHCP_START=\"${AP_DHCP_START}\" AP_DHCP_END=\"${AP_DHCP_END}\" 
+     ${PI_PROJECT_ROOT}/config_ap.sh'"
 echo "   Point d'accès configuré avec succès."
 
 # 7. Installation des dépendances Python dans un environnement virtuel

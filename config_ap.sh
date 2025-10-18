@@ -23,6 +23,8 @@ WLAN_INTERFACE=${WLAN_INTERFACE:-wlan0}
 AP_SSID=${AP_SSID:-raspberrypi-audio}
 AP_PASSWORD=${AP_PASSWORD:-password}
 AP_IP=${AP_IP:-192.168.1.1}
+AP_DHCP_START=${AP_DHCP_START:-192.168.1.100}
+AP_DHCP_END=${AP_DHCP_END:-192.168.1.200}
 
 # --- Vérification des Prérequis ---
 if [ "$EUID" -ne 0 ]; then
@@ -70,16 +72,16 @@ EOF
 echo "--- Écriture du fichier /etc/dnsmasq.conf ---"
 cat > /etc/dnsmasq.conf <<EOF
 interface=$WLAN_INTERFACE
-dhcp-range=$AP_IP,192.168.0.254,12h
+dhcp-range=$AP_DHCP_START,$AP_DHCP_END,12h
 EOF
 
 # 6. Démarrage des services
 echo "--- Démarrage des services hostapd et dnsmasq ---"
 systemctl unmask hostapd
 systemctl enable hostapd
-systemctl start hostapd
+systemctl restart hostapd
 systemctl enable dnsmasq
-systemctl start dnsmasq
+systemctl restart dnsmasq
 
 # 7. Activation du routage IP
 echo "--- Activation du routage IP ---"
