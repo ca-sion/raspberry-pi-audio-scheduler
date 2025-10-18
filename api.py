@@ -51,7 +51,7 @@ AUDIO_FILES = {
 
 # Statut du lecteur automatique
 # Cette variable globale est une simulation sur Mac.
-# Sur le Pi, le statut serait vérifié via `systemctl is-active audio-player.service`
+# Sur le Pi, le statut serait vérifié via `systemctl is-active pi-audio-player.service`
 auto_player_running = True 
 
 # Variable globale pour stocker le processus de lecture en cours
@@ -217,14 +217,14 @@ def get_status():
     global auto_player_running
     if IS_RASPBERRY_PI:
         try:
-            result = subprocess.run(["systemctl", "is-active", "audio-player.service"], capture_output=True, text=True, check=True)
+            result = subprocess.run(["systemctl", "is-active", "pi-audio-player.service"], capture_output=True, text=True, check=True)
             auto_player_running = ("active" in result.stdout.strip())
             add_log(f"Statut réel du service audio-player : {result.stdout.strip()}")
         except FileNotFoundError:
             add_log("Erreur: 'systemctl' n'est pas trouvé. Êtes-vous sûr d'être sur un système Linux avec systemd ?")
             auto_player_running = False 
         except subprocess.CalledProcessError as e:
-            add_log(f"Le service 'audio-player.service' n'est pas actif ou a échoué. Erreur: {e.stderr.strip()}")
+            add_log(f"Le service 'pi-audio-player.service' n'est pas actif ou a échoué. Erreur: {e.stderr.strip()}")
             auto_player_running = False
         except Exception as e:
             add_log(f"Erreur inattendue lors de la vérification du statut systemd : {e}")
@@ -247,7 +247,7 @@ def manage_auto_player(action):
         if IS_RASPBERRY_PI:
             add_log("Démarrage réel du service audio-player sur Raspberry Pi.")
             try:
-                subprocess.run(["sudo", "systemctl", "start", "audio-player.service"], check=True)
+                subprocess.run(["sudo", "systemctl", "start", "pi-audio-player.service"], check=True)
                 auto_player_running = True 
                 return jsonify({"status": "Auto player started on Pi"}), 200
             except FileNotFoundError:
@@ -267,7 +267,7 @@ def manage_auto_player(action):
         if IS_RASPBERRY_PI:
             add_log("Arrêt réel du service audio-player sur Raspberry Pi.")
             try:
-                subprocess.run(["sudo", "systemctl", "stop", "audio-player.service"], check=True)
+                subprocess.run(["sudo", "systemctl", "stop", "pi-audio-player.service"], check=True)
                 auto_player_running = False 
                 return jsonify({"status": "Auto player stopped on Pi"}), 200
             except FileNotFoundError:
