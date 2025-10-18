@@ -110,6 +110,7 @@ if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers. Sortie."; e
 echo "--- 3. Copie des scripts de configuration ---"
 scp ${LOCAL_PROJECT_DIR}/config_ap.sh ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
 if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie de config_ap.sh. Sortie."; exit 1; fi
+ssh_exec "sudo chmod 700 ${PI_PROJECT_ROOT}/config_ap.sh"
 
 # 4. Copier le fichier de service pour le point d'accès
 echo "--- 4. Copie du service systemd pour le point d'accès ---"
@@ -145,7 +146,6 @@ echo "   Services Flask et Audio Player créés/mis à jour."
 
 # 9. Nettoyage et finalisation
 echo "--- 9. Nettoyage et finalisation ---"
-ssh_exec "sudo chmod 700 ${PI_PROJECT_ROOT}/config_ap.sh"
 ssh_exec "sudo mv ${PI_PROJECT_ROOT}/etc/configure-ap.service /etc/systemd/system/${AP_SERVICE_NAME}.service"
 ssh_exec "sudo systemctl daemon-reload"
 ssh_exec "sudo systemctl enable ${AP_SERVICE_NAME}"

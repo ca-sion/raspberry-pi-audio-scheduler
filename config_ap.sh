@@ -35,12 +35,21 @@ echo "--- Installation des dépendances (hostapd, dnsmasq) ---"
 apt update
 apt install -y hostapd dnsmasq
 
-# 2. Configuration de l'interface Wi-Fi
+# 2. Configuration de NetworkManager pour ignorer l'interface Wi-Fi
+echo "--- Configuration de NetworkManager pour ignorer $WLAN_INTERFACE ---"
+cat > /etc/NetworkManager/conf.d/99-unmanaged-wlan0.conf <<EOF
+[keyfile]
+unmanaged-devices=interface-name:$WLAN_INTERFACE
+EOF
+systemctl restart NetworkManager
+
+# 3. Configuration de l'interface Wi-Fi
 echo "--- Configuration de l'interface Wi-Fi ($WLAN_INTERFACE) ---"
+sleep 5 # Laisse le temps à NetworkManager de libérer l'interface
 ip a flush dev $WLAN_INTERFACE
 ip a add $AP_IP/24 dev $WLAN_INTERFACE
 
-# 3. Configuration de hostapd
+# 4. Configuration de hostapd
 echo "--- Écriture du fichier /etc/hostapd/hostapd.conf ---"
 cat > /etc/hostapd/hostapd.conf <<EOF
 interface=$WLAN_INTERFACE
@@ -56,14 +65,14 @@ wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 EOF
 
-# 4. Configuration de dnsmasq
+# 5. Configuration de dnsmasq
 echo "--- Écriture du fichier /etc/dnsmasq.conf ---"
 cat > /etc/dnsmasq.conf <<EOF
 interface=$WLAN_INTERFACE
 dhcp-range=$AP_IP,192.168.0.254,12h
 EOF
 
-# 5. Démarrage des services
+# 6. Démarrage des services
 echo "--- Démarrage des services hostapd et dnsmasq ---"
 systemctl unmask hostapd
 systemctl enable hostapd
@@ -71,7 +80,7 @@ systemctl start hostapd
 systemctl enable dnsmasq
 systemctl start dnsmasq
 
-# 6. Activation du routage IP
+# 7. Activation du routage IP
 echo "--- Activation du routage IP ---"
 sysctl net.ipv4.ip_forward=1
 echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-ip-forward.conf
