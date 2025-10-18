@@ -7,37 +7,34 @@
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
         .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
+        h1, h2 { color: #333; }
+        h1 { text-align: center; }
         button { padding: 10px 15px; margin: 5px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; }
         button:hover { background-color: #0056b3; }
-        button.stop-button { background-color: #dc3545; } 
-        button.stop-button:hover { background-color: #c82333; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        button.action-button { background-color: #28a745; }
+        button.action-button:hover { background-color: #218838; }
+        button.stop-button, button.remove-button { background-color: #dc3545; }
+        button.stop-button:hover, button.remove-button:hover { background-color: #c82333; }
         button.logout-button { background-color: #6c757d; }
         button.logout-button:hover { background-color: #5a6268; }
         .control-group { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
         .status { margin-top: 10px; font-weight: bold; }
-        input[type="password"] { padding: 8px; margin-bottom: 10px; width: 90%; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="password"], input[type="text"], input[type="time"], input[type="number"] { padding: 8px; margin-right: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
         
-        /* Styles pour les zones de logs */
-        .log-area { 
-            margin-top: 10px; 
-            border: 1px solid #ddd; 
-            background-color: #e9e9e9; 
-            padding: 10px; 
-            height: 150px; /* Hauteur fixe pour le défilement */
-            overflow-y: scroll; /* Active le défilement vertical */
-            font-family: monospace; 
-            font-size: 0.8em; 
-            color: #333; 
-        }
+        .log-area { margin-top: 10px; border: 1px solid #ddd; background-color: #e9e9e9; padding: 10px; height: 150px; overflow-y: scroll; font-family: monospace; font-size: 0.8em; color: #333; }
         .log-area p { margin: 0; padding: 2px 0; border-bottom: 1px dashed #ccc; }
         .log-area p:last-child { border-bottom: none; }
         .log-area h3 { margin-top: 0; margin-bottom: 5px; color: #555; font-size: 1em;}
+
+        .schedule-entry { border: 1px solid #e0e0e0; padding: 10px; margin-bottom: 10px; border-radius: 5px; background: #f9f9f9; }
+        .schedule-entry label { margin-right: 10px; }
+        .day-checkboxes label { margin-right: 5px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Contrôle Audio CA Sion</h1>
+        <h1>Contrôle Audio</h1>
 
         <div class="control-group">
             <h2>Authentification</h2>
@@ -59,10 +56,9 @@
                 <button onclick="playAudio('fc_sion-fr')">FC Sion (FR)</button>
                 <button onclick="playAudio('fc_sion-de')">FC Sion (DE)</button>
                 <div id="playStatus" class="status"></div>
-                
-                <hr style="margin: 15px 0;"> 
+                <hr style="margin: 15px 0;">
                 <button onclick="stopAudio()" class="stop-button">Arrêter la lecture en cours</button>
-                <div id="stopStatus" class="status"></div> 
+                <div id="stopStatus" class="status"></div>
             </div>
 
             <div class="control-group">
@@ -74,36 +70,37 @@
             </div>
 
             <div class="control-group">
+                <h2>Configuration du Planificateur</h2>
+                <div id="schedulerConfigContainer"></div>
+                <button onclick="addScheduleEntry()">Ajouter une plage horaire</button>
+                <hr>
+                <button onclick="saveSchedule()" class="action-button">Enregistrer les modifications</button>
+                <div id="saveStatus" class="status"></div>
+            </div>
+
+            <div class="control-group">
                 <h3>Journal des activités API</h3>
-                <div id="apiLogContainer" class="log-area">
-                    <p>Chargement des logs API...</p>
-                </div>
+                <div id="apiLogContainer" class="log-area"><p>Chargement...</p></div>
             </div>
 
             <div class="control-group">
                 <h3>Journal des activités Planificateur</h3>
-                <div id="plannerLogContainer" class="log-area">
-                    <p>Chargement des logs du planificateur...</p>
-                </div>
+                <div id="plannerLogContainer" class="log-area"><p>Chargement...</p></div>
             </div>
         </div>
     </div>
 
     <script>
-        const API_BASE_URL = window.location.origin; // ou http://localhost:5000
-        let authToken = ''; 
-        let logIntervalId; 
-        let plannerLogIntervalId; 
+        const API_BASE_URL = window.location.origin;
+        let authToken = '';
+        let logIntervalId, plannerLogIntervalId;
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Tenter de récupérer le token en session au chargement de la page
             const storedToken = sessionStorage.getItem('authToken');
             if (storedToken) {
                 authToken = storedToken;
                 setLoggedInState(true);
-                fetchStatusAll(); 
-                startLogPolling(); 
-                startPlannerLogPolling(); 
+                fetchInitialData();
             } else {
                 setLoggedInState(false);
             }
@@ -124,13 +121,8 @@
                 authStatus.style.color = "red";
                 mainControls.style.display = 'none';
                 logoutButton.style.display = 'none';
-                // Nettoyer les logs et statuts quand déconnecté
-                document.getElementById('playStatus').innerText = '';
-                document.getElementById('stopStatus').innerText = '';
-                document.getElementById('schedulerStatus').innerText = 'Chargement...';
-                document.getElementById('schedulerActionStatus').innerText = '';
-                document.getElementById('apiLogContainer').innerHTML = '<p>Logs API non disponibles (déconnecté)</p>';
-                document.getElementById('plannerLogContainer').innerHTML = '<p>Logs Planificateur non disponibles (déconnecté)</p>';
+                if (logIntervalId) clearInterval(logIntervalId);
+                if (plannerLogIntervalId) clearInterval(plannerLogIntervalId);
             }
         }
 
@@ -139,194 +131,199 @@
             try {
                 const response = await fetch(API_BASE_URL + '/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ password: password })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
                 });
-
                 if (response.ok) {
                     const data = await response.json();
                     authToken = data.token;
-                    sessionStorage.setItem('authToken', authToken); // Stocke le token en session
+                    sessionStorage.setItem('authToken', authToken);
                     setLoggedInState(true);
-                    fetchStatusAll(); 
-                    startLogPolling(); 
-                    startPlannerLogPolling(); 
-                    document.getElementById('passwordInput').value = ''; // Efface le champ de mot de passe
+                    fetchInitialData();
+                    document.getElementById('passwordInput').value = '';
                 } else {
                     const errorData = await response.json();
-                    document.getElementById('authStatus').innerText = `Erreur de connexion : ${errorData.error}`;
-                    document.getElementById('authStatus').style.color = "red";
-                    setLoggedInState(false);
+                    document.getElementById('authStatus').innerText = `Erreur : ${errorData.error}`;
                 }
             } catch (error) {
-                console.error('Échec de la connexion:', error);
                 document.getElementById('authStatus').innerText = "Erreur de connexion au serveur.";
-                document.getElementById('authStatus').style.color = "red";
-                setLoggedInState(false);
             }
         }
 
         function logout() {
-            authToken = ''; // Efface le token
-            sessionStorage.removeItem('authToken'); // Supprime le token du sessionStorage
-            stopLogPolling(); 
-            stopPlannerLogPolling();
+            authToken = '';
+            sessionStorage.removeItem('authToken');
             setLoggedInState(false);
-            document.getElementById('passwordInput').value = ''; // Efface le champ de mot de passe
         }
 
         async function makeApiCall(endpoint, method, body = null) {
             if (!authToken) {
-                alert("Vous n'êtes pas connecté ou votre session a expiré. Veuillez vous reconnecter.");
-                setLoggedInState(false);
-                stopLogPolling();
-                stopPlannerLogPolling();
+                alert("Session expirée. Veuillez vous reconnecter.");
+                logout();
                 return null;
             }
-
-            const headers = {
-                'Authorization': `Bearer ${authToken}`, // Utilise le token de session
-                'Content-Type': 'application/json'
-            };
             try {
                 const response = await fetch(API_BASE_URL + endpoint, {
-                    method: method,
-                    headers: headers,
+                    method,
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
                     body: body ? JSON.stringify(body) : null
                 });
-
-                if (!response.ok) { 
-                    if (response.status === 401) {
-                        alert("Accès non autorisé. Veuillez vous reconnecter.");
-                        logout(); // Déconnecte l'utilisateur si le token est invalide
-                    }
-                    const errorData = await response.json().catch(() => ({})); 
-                    console.error(`API Error: ${response.status} ${response.statusText}`, errorData);
+                if (!response.ok) {
+                    if (response.status === 401) logout();
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                return response.json(); 
+                return response.json();
             } catch (error) {
-                console.error('Échec de l\'appel API:', error); 
-                // Ne pas alerter ici, laisser les fonctions appelantes gérer l'affichage de l'erreur
-                return null; 
+                console.error('API call failed:', error);
+                return null;
             }
         }
 
-        async function playAudio(lang) {
-            const statusDiv = document.getElementById('playStatus');
-            statusDiv.innerText = `Lecture de ${lang}...`; 
-            const result = await makeApiCall(`/play/${lang}`, 'POST');
-            if (result && result.status === "Playing") {
-                statusDiv.innerText = `Message en ${lang} diffusé.`;
+        // --- Fonctions de l'interface principale ---
+        async function playAudio(lang) { await makeApiCall(`/play/${lang}`, 'POST'); fetchStatusAll(); }
+        async function stopAudio() { await makeApiCall(`/stop_audio`, 'POST'); fetchStatusAll(); }
+        async function toggleScheduler(action) { await makeApiCall(`/auto_player/${action}`, 'POST'); fetchStatusAll(); }
+
+        // --- Gestion du planificateur ---
+        async function fetchSchedule() {
+            const result = await makeApiCall('/api/schedule', 'GET');
+            if (result) renderSchedule(result.schedules);
+        }
+
+        function renderSchedule(schedules) {
+            const container = document.getElementById('schedulerConfigContainer');
+            container.innerHTML = '';
+            if (!schedules || schedules.length === 0) {
+                container.innerHTML = '<p>Aucune plage horaire définie.</p>';
+                return;
+            }
+            schedules.forEach((entry, index) => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'schedule-entry';
+                entryDiv.dataset.index = index;
+                const days = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'];
+                const dayCheckboxes = days.map((day, i) => `
+                    <label><input type="checkbox" value="${i + 1}" ${entry.days.includes(i + 1) ? 'checked' : ''}> ${day}</label>`).join('');
+
+                entryDiv.innerHTML = `
+                    <label>Activé: <input type="checkbox" class="enabled" ${entry.enabled ? 'checked' : ''}></label>
+                    <hr>
+                    <div>
+                        <strong>Jours:</strong> <span class="day-checkboxes">${dayCheckboxes}</span>
+                    </div>
+                    <div>
+                        <label>Début: <input type="time" class="start-time" value="${entry.start_time}"></label>
+                        <label>Fin: <input type="time" class="end-time" value="${entry.end_time}"></label>
+                    </div>
+                    <div>
+                        <label>Intervalle (min): <input type="number" class="interval" value="${entry.interval_minutes}" min="1"></label>
+                        <label>Langues (séparées par virgule): <input type="text" class="languages" value="${entry.languages.join(',')}"></label>
+                    </div>
+                    <button class="remove-button" onclick="removeScheduleEntry(this)">Supprimer</button>
+                `;
+                container.appendChild(entryDiv);
+            });
+        }
+
+        function addScheduleEntry() {
+            const newEntry = {
+                start_time: "09:00",
+                end_time: "17:00",
+                interval_minutes: 30,
+                languages: ["fr", "en"],
+                days: [1, 2, 3, 4, 5],
+                enabled: true
+            };
+            const container = document.getElementById('schedulerConfigContainer');
+            const schedules = Array.from(container.querySelectorAll('.schedule-entry')).map(div => parseEntryFromDOM(div));
+            schedules.push(newEntry);
+            renderSchedule(schedules);
+        }
+
+        function removeScheduleEntry(button) {
+            button.closest('.schedule-entry').remove();
+        }
+
+        function parseEntryFromDOM(entryDiv) {
+            const enabled = entryDiv.querySelector('.enabled').checked;
+            const days = Array.from(entryDiv.querySelectorAll('.day-checkboxes input:checked')).map(cb => parseInt(cb.value));
+            const start_time = entryDiv.querySelector('.start-time').value;
+            const end_time = entryDiv.querySelector('.end-time').value;
+            const interval_minutes = parseInt(entryDiv.querySelector('.interval').value);
+            const languages = entryDiv.querySelector('.languages').value.split(',').map(s => s.trim()).filter(Boolean);
+            return { start_time, end_time, interval_minutes, languages, days, enabled };
+        }
+
+        async function saveSchedule() {
+            const container = document.getElementById('schedulerConfigContainer');
+            const entries = Array.from(container.querySelectorAll('.schedule-entry'));
+            const newSchedules = entries.map(parseEntryFromDOM);
+            const statusDiv = document.getElementById('saveStatus');
+            statusDiv.innerText = 'Sauvegarde en cours...';
+            const result = await makeApiCall('/api/schedule', 'POST', { schedules: newSchedules });
+            if (result && result.status === 'success') {
+                statusDiv.innerText = 'Programmation sauvegardée avec succès !';
+                statusDiv.style.color = 'green';
             } else {
-                statusDiv.innerText = `Erreur lors de la diffusion en ${lang}.`;
-            }
-            fetchStatusAll(); 
-        }
-
-        async function stopAudio() {
-            const statusDiv = document.getElementById('stopStatus');
-            statusDiv.innerText = `Demande d'arrêt...`;
-            const result = await makeApiCall(`/stop_audio`, 'POST');
-            if (result && result.status) {
-                statusDiv.innerText = `Statut : ${result.status}`;
-            } else {
-                statusDiv.innerText = `Erreur lors de l'arrêt.`;
-            }
-            fetchStatusAll(); 
-        }
-
-        async function fetchSchedulerStatus() {
-            const statusSpan = document.getElementById('schedulerStatus');
-            const result = await makeApiCall('/status', 'GET');
-            if (result) {
-                statusSpan.innerText = result.auto_player_running ? "Actif" : "Inactif";
-                statusSpan.style.color = result.auto_player_running ? "green" : "red";
-                const stopButton = document.querySelector('.stop-button');
-                if (result.manual_audio_playing) {
-                    stopButton.disabled = false;
-                } else {
-                    stopButton.disabled = true;
-                }
-            } else {
-                statusSpan.innerText = "Non disponible";
-                statusSpan.style.color = "gray";
+                statusDiv.innerText = 'Erreur lors de la sauvegarde.';
+                statusDiv.style.color = 'red';
             }
         }
 
-        async function toggleScheduler(action) {
-            const statusDiv = document.getElementById('schedulerActionStatus');
-            statusDiv.innerText = `Demande de ${action} du planificateur...`;
-            const result = await makeApiCall(`/auto_player/${action}`, 'POST');
-            if (result && result.status) {
-                statusDiv.innerText = result.status;
-                fetchStatusAll(); 
-            } else {
-                statusDiv.innerText = `Erreur lors de l'action ${action}.`;
-            }
-        }
-
-        async function fetchStatusAll() {
-            await fetchSchedulerStatus();
-        }
-
-        async function fetchApiLogs() {
-            const logContainer = document.getElementById('apiLogContainer');
-            const result = await makeApiCall('/api_logs', 'GET'); 
-            updateLogContainer(logContainer, result);
+        // --- Initialisation et Polling ---
+        function fetchInitialData() {
+            fetchStatusAll();
+            fetchSchedule();
+            startLogPolling();
+            startPlannerLogPolling();
         }
 
         function startLogPolling() {
-            if (logIntervalId) {
-                clearInterval(logIntervalId);
-            }
-            fetchApiLogs(); 
-            logIntervalId = setInterval(fetchApiLogs, 3000); 
+            if (logIntervalId) clearInterval(logIntervalId);
+            fetchApiLogs();
+            logIntervalId = setInterval(fetchApiLogs, 5000);
         }
 
         function stopLogPolling() {
-            if (logIntervalId) {
-                clearInterval(logIntervalId);
-                logIntervalId = null;
-            }
+            if (logIntervalId) clearInterval(logIntervalId);
         }
 
-        async function fetchPlannerLogs() {
-            const logContainer = document.getElementById('plannerLogContainer');
-            const result = await makeApiCall('/planner_logs', 'GET'); 
-            updateLogContainer(logContainer, result);
+        async function fetchApiLogs() {
+            const result = await makeApiCall('/api_logs', 'GET');
+            updateLogContainer(document.getElementById('apiLogContainer'), result);
         }
 
         function startPlannerLogPolling() {
-            if (plannerLogIntervalId) {
-                clearInterval(plannerLogIntervalId);
-            }
+            if (plannerLogIntervalId) clearInterval(plannerLogIntervalId);
             fetchPlannerLogs();
-            plannerLogIntervalId = setInterval(fetchPlannerLogs, 3000);
+            plannerLogIntervalId = setInterval(fetchPlannerLogs, 5000);
         }
 
         function stopPlannerLogPolling() {
-            if (plannerLogIntervalId) {
-                clearInterval(plannerLogIntervalId);
-                plannerLogIntervalId = null;
+            if (plannerLogIntervalId) clearInterval(plannerLogIntervalId);
+        }
+
+        async function fetchPlannerLogs() {
+            const result = await makeApiCall('/planner_logs', 'GET');
+            updateLogContainer(document.getElementById('plannerLogContainer'), result);
+        }
+
+        async function fetchStatusAll() {
+            const result = await makeApiCall('/status', 'GET');
+            if (result) {
+                document.getElementById('schedulerStatus').innerText = result.auto_player_running ? "Actif" : "Inactif";
+                document.getElementById('schedulerStatus').style.color = result.auto_player_running ? "green" : "red";
+                document.getElementById('playStatus').innerText = result.manual_audio_playing ? "Lecture manuelle en cours..." : "Prêt";
             }
         }
 
         function updateLogContainer(container, result) {
+            if (!container) return;
             if (result && result.logs) {
-                container.innerHTML = ''; 
-                result.logs.forEach(log => {
-                    const p = document.createElement('p');
-                    p.textContent = log;
-                    container.appendChild(p);
-                });
+                container.innerHTML = result.logs.map(log => `<p>${log}</p>`).join('');
                 container.scrollTop = container.scrollHeight;
-            } else if (result === null) {
-                container.innerHTML = '<p style="color: red;">Erreur de connexion ou session expirée.</p>';
-            } else { 
-                container.innerHTML = `<p style="color: red;">${result.error || 'Erreur inconnue lors de la récupération des logs.'}</p>`;
+            } else {
+                container.innerHTML = '<p style="color: red;">Erreur de chargement des logs.</p>';
             }
         }
     </script>

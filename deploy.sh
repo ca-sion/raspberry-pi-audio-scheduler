@@ -103,7 +103,7 @@ ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/etc ${PI_PROJECT_ROOT}/audio ${PI_PROJECT_
 
 # 2. Copier les fichiers essentiels du projet
 echo "--- 2. Copie des fichiers du projet ---"
-scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
+scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/schedule.json ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
 if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers de base. Sortie."; exit 1; fi
 
 echo "--- 2b. Copie des fichiers de l'interface web ---"

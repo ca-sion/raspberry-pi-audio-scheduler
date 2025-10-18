@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify
 import subprocess
 import threading
 import os
+import json
 from functools import wraps
 from flask_cors import CORS
 from datetime import datetime
@@ -20,20 +21,21 @@ IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
 PASSWORD = os.getenv('PASSWORD', 'default_password')
 PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/app')
 
-# --- Chemins des fichiers audio et logs ---
+# --- Chemins des fichiers ---
 if IS_RASPBERRY_PI:
     AUDIO_BASE_DIR = os.path.join(PI_PROJECT_ROOT, "audio")
     PLANNER_LOG_FILE_PATH = os.path.join(PI_PROJECT_ROOT, "logs", "audio_player.log")
+    SCHEDULE_FILE_PATH = os.path.join(PI_PROJECT_ROOT, "schedule.json")
 else: # Environnement de développement (Mac)
     AUDIO_BASE_DIR = os.path.join(os.getcwd(), "audio")
     PLANNER_LOG_FILE_PATH = os.path.join(os.getcwd(), "temp_planner_log.log")
+    SCHEDULE_FILE_PATH = os.path.join(os.getcwd(), "schedule.json")
 
 # Assurez-vous que les répertoires nécessaires existent au démarrage
 os.makedirs(AUDIO_BASE_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(PLANNER_LOG_FILE_PATH), exist_ok=True)
 
 # Initialisation du fichier de log du planificateur sur Mac si inexistant
-# Cela crée le fichier vide si besoin pour éviter FileNotFoundError au démarrage
 if not IS_RASPBERRY_PI and not os.path.exists(PLANNER_LOG_FILE_PATH):
     with open(PLANNER_LOG_FILE_PATH, 'w') as f:
         f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [PLANNER] Fichier de log du planificateur initialisé (pour Mac).\n")
@@ -50,12 +52,9 @@ AUDIO_FILES = {
 }
 
 # Statut du lecteur automatique
-# Cette variable globale est une simulation sur Mac.
-# Sur le Pi, le statut serait vérifié via `systemctl is-active pi-audio-player.service`
 auto_player_running = True 
 
 # Variable globale pour stocker le processus de lecture en cours
-# Initialisez-la à None
 current_audio_process = None 
 current_audio_thread = None 
 
@@ -73,29 +72,22 @@ def add_log(message):
 def authenticate(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        # Le token est simplement le mot de passe du .env pour cet exemple.
-        # En production, ce serait un token JWT ou un UUID généré.
         expected_token = PASSWORD 
-        
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             add_log("Accès non autorisé tenté : Pas d'en-tête d'autorisation.")
             return jsonify({"error": "Unauthorized: Missing Authorization header"}), 401
-
         try:
-            scheme, token = auth_header.split(None, 1) # Sépare "Bearer" du token
+            scheme, token = auth_header.split(None, 1)
         except ValueError:
             add_log("Accès non autorisé tenté : Format d'en-tête non valide.")
             return jsonify({"error": "Unauthorized: Invalid Authorization header format"}), 401
-
         if scheme.lower() != 'bearer':
             add_log(f"Accès non autorisé tenté : Schéma d'authentification invalide '{scheme}'.")
             return jsonify({"error": "Unauthorized: Invalid authentication scheme"}), 401
-        
         if token != expected_token:
             add_log("Accès non autorisé tenté : Token invalide.")
             return jsonify({"error": "Unauthorized: Invalid token"}), 401
-            
         return func(*args, **kwargs)
     return wrapper
 
@@ -107,10 +99,7 @@ def home():
 def login():
     data = request.get_json()
     password_attempt = data.get('password')
-
-    if password_attempt == PASSWORD: # Utilisez la variable PASSWORD chargée depuis .env
-        # Pour cet exemple, le token est simplement le mot de passe lui-même.
-        # Dans une application réelle, générez un JWT ou un token opaque et stockez-le en toute sécurité.
+    if password_attempt == PASSWORD:
         token = PASSWORD 
         add_log("Connexion réussie.")
         return jsonify({"message": "Authentication successful", "token": token}), 200
@@ -118,7 +107,38 @@ def login():
         add_log("Tentative de connexion échouée : Mot de passe incorrect.")
         return jsonify({"error": "Invalid credentials"}), 401
 
-# --- Routes API (le reste reste inchangé, mais utilise maintenant le décorateur authenticate) ---
+# --- Routes API pour la programmation ---
+@app.route('/api/schedule', methods=['GET'])
+@authenticate
+def get_schedule():
+    try:
+        with open(SCHEDULE_FILE_PATH, 'r') as f:
+            data = json.load(f)
+        return jsonify(data)
+    except FileNotFoundError:
+        add_log(f"Le fichier de programmation {SCHEDULE_FILE_PATH} est introuvable.")
+        return jsonify({"error": "Schedule file not found."}), 404
+    except Exception as e:
+        add_log(f"Erreur lors de la lecture du fichier de programmation : {e}")
+        return jsonify({"error": f"An error occurred: {e}"}), 500
+
+@app.route('/api/schedule', methods=['POST'])
+@authenticate
+def set_schedule():
+    new_data = request.get_json()
+    if not new_data or 'schedules' not in new_data:
+        return jsonify({"error": "Invalid data format."}), 400
+    
+    try:
+        with open(SCHEDULE_FILE_PATH, 'w') as f:
+            json.dump(new_data, f, indent=2)
+        add_log("La programmation a été mise à jour avec succès.")
+        return jsonify({"status": "success", "message": "Schedule updated successfully."})
+    except Exception as e:
+        add_log(f"Erreur lors de l'écriture du fichier de programmation : {e}")
+        return jsonify({"error": f"An error occurred: {e}"}), 500
+
+# --- Routes API (le reste reste inchangé) ---
 @app.route('/play/<lang>', methods=['POST'])
 @authenticate
 def play_now(lang):
@@ -147,7 +167,6 @@ def play_now(lang):
                     if audio_device:
                         mpv_command.extend([f"--audio-device={audio_device}"])
                     else:
-                        # Fallback to default alsa if not specified
                         mpv_command.extend(["--ao=alsa"])
                     mpv_command.append(path)
                     current_audio_process = subprocess.Popen(mpv_command)
