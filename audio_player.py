@@ -3,7 +3,7 @@ import os
 import time
 import subprocess
 from datetime import datetime, timedelta
-from dotenv import load_dotenv # <--- NOUVEAU !
+from dotenv import load_dotenv
 
 # Charger les variables d'environnement depuis .env au démarrage de l'application
 load_dotenv()
@@ -12,6 +12,7 @@ load_dotenv()
 # Récupérer les variables depuis les variables d'environnement
 IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
 PI_PROJECT_ROOT = os.getenv('PI_PROJECT_ROOT', '/home/pi/app')
+AUDIO_DEVICE = os.getenv('MPV_AUDIO_DEVICE', 'auto')
 
 # --- Chemins des fichiers audio et logs ---
 if IS_RASPBERRY_PI:
@@ -71,7 +72,10 @@ def play_message(lang_code):
             if IS_RASPBERRY_PI:
                 # Sur le Raspberry Pi, utilisez 'mpv' pour une meilleure gestion audio.
                 # Assurez-vous que mpv est installé : sudo apt install mpv
-                subprocess.run(["mpv", "--ao=alsa", file_path], check=True)
+                command = ['mpv', '--no-terminal', '--really-quiet', file_path]
+                if AUDIO_DEVICE != 'auto':
+                    command.extend(['--audio-device', AUDIO_DEVICE])
+                subprocess.run(command, check=True)
             else:
                 # Sur Mac, utilisez 'afplay' pour la lecture audio.
                 subprocess.run(["afplay", file_path], check=True) 

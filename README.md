@@ -68,6 +68,31 @@ La configuration de l'application est gérée via un fichier `.env`.
     * **`PI_HOST`** et **`PI_USER`** : Informations de connexion SSH pour votre Pi.
     * **`AP_SSID`** et **`AP_WIFI_PASSWORD`** : Nom et mot de passe pour le point d'accès Wi-Fi créé par le Raspberry Pi.
     
+### 4.1. Configuration du Périphérique Audio (Optionnel)
+
+Par défaut, l'application utilise le périphérique audio de sortie standard du Raspberry Pi (la prise jack). Si vous souhaitez utiliser un autre périphérique, comme un adaptateur audio USB, vous pouvez le spécifier.
+
+1.  **Trouver le nom du périphérique**
+
+    Connectez votre périphérique audio USB au Raspberry Pi. Ensuite, connectez-vous en SSH au Pi et exécutez la commande suivante pour lister les périphériques audio disponibles :
+
+    ```bash
+    mpv --audio-device=help
+    ```
+
+    La sortie listera les périphériques. Repérez le nom de votre adaptateur USB. Il ressemblera probablement à quelque chose comme `alsa/sysdefault:CARD=UACDemoV10`.
+
+2.  **Configurer le périphérique dans `.env`**
+
+    Ouvrez votre fichier `.env` et ajoutez ou modifiez la variable `MPV_AUDIO_DEVICE` avec le nom que vous avez trouvé. Par exemple :
+
+    ```python
+    MPV_AUDIO_DEVICE="alsa/sysdefault:CARD=UACDemoV10"
+    ```
+
+    Si la variable `MPV_AUDIO_DEVICE` est vide ou n'existe pas, le lecteur audio reviendra automatiquement à la sortie par défaut du système.
+
+    Après avoir modifié le fichier `.env`, redéployez l'application en utilisant le script `deploy.sh` pour que les changements soient pris en compte sur le Raspberry Pi.
 
 ## 5\. Déploiement et Lancement sur Raspberry Pi (Automatisé avec `deploy.sh`)
 
@@ -128,22 +153,22 @@ Remplacez `<adresse_ip_du_pi>` par l'adresse IP réelle de votre Raspberry Pi.
 
   * **Vérifier le statut d'un service :**
     ```bash
-    sudo systemctl status flask-api.service
+    sudo systemctl status pi-audio-api.service
     sudo systemctl status audio-player.service
     ```
   * **Voir les logs d'un service :**
     ```bash
-    journalctl -u flask-api.service -f # Pour les logs en temps réel de l'API
+    journalctl -u pi-audio-api.service -f # Pour les logs en temps réel de l'API
     journalctl -u audio-player.service -f # Pour les logs en temps réel du planificateur
     ```
   * **Redémarrer un service :**
     ```bash
-    sudo systemctl restart flask-api.service
+    sudo systemctl restart pi-audio-api.service
     sudo systemctl restart audio-player.service
     ```
   * **Arrêter un service :**
     ```bash
-    sudo systemctl stop flask-api.service
+    sudo systemctl stop pi-audio-api.service
     sudo systemctl stop audio-player.service
     ```
   * **Erreurs de permissions :** Si vous rencontrez des erreurs de permission (`Permission denied`), assurez-vous que l'utilisateur `pi` a les droits d'accès aux dossiers audio et logs. Le script de déploiement tente de les créer avec les droits appropriés.
