@@ -6,8 +6,6 @@ import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-# Charger les variables d'environnement depuis .env au démarrage de l'application
-load_dotenv()
 
 # --- Configuration de l'environnement ---
 IS_RASPBERRY_PI = os.getenv('IS_RASPBERRY_PI', 'False').lower() == 'true'
@@ -18,15 +16,18 @@ AUDIO_DEVICE = os.getenv('MPV_AUDIO_DEVICE', 'auto')
 if IS_RASPBERRY_PI:
     AUDIO_BASE_DIR = os.path.join(PI_PROJECT_ROOT, "audio")
     PLANNER_LOG_FILE_PATH = os.path.join(PI_PROJECT_ROOT, "logs", "audio_player.log")
+    MPV_LOG_FILE_PATH = os.path.join(PI_PROJECT_ROOT, "logs", "mpv.log")
     SCHEDULE_FILE_PATH = os.path.join(PI_PROJECT_ROOT, "schedule.json")
 else: # Environnement de développement (Mac)
     AUDIO_BASE_DIR = os.path.join(os.getcwd(), "audio")
     PLANNER_LOG_FILE_PATH = os.path.join(os.getcwd(), "temp_planner_log.log")
+    MPV_LOG_FILE_PATH = os.path.join(os.getcwd(), "logs", "mpv.log")
     SCHEDULE_FILE_PATH = os.path.join(os.getcwd(), "schedule.json")
 
 # Créez les dossiers audio et logs si inexistants
 os.makedirs(AUDIO_BASE_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(PLANNER_LOG_FILE_PATH), exist_ok=True)
+os.makedirs(os.path.dirname(MPV_LOG_FILE_PATH), exist_ok=True)
 
 AUDIO_FILES = {
     "fr": os.path.join(AUDIO_BASE_DIR, "long-fr.mp3"),
@@ -76,14 +77,17 @@ def play_message(lang_code):
         log_planner_message(f"Playing message in {lang_code}: {file_path}")
         try:
             if IS_RASPBERRY_PI:
-                command = ['mpv', '--no-terminal', '--really-quiet', file_path]
+                command = ['mpv', '--no-terminal', f'--log-file={MPV_LOG_FILE_PATH}', '--msg-level=all=v', file_path]
                 if AUDIO_DEVICE != 'auto':
-                    command.extend(['--audio-device', AUDIO_DEVICE])
-                subprocess.run(command, check=True)
+                    command.append(f'--audio-device={AUDIO_DEVICE}')
+                result = subprocess.run(command, check=False, capture_output=True, text=True)
+                if result.returncode != 0:
+                    log_planner_message(f"MPV Error (Exit Code: {result.returncode}):\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
+                    raise subprocess.CalledProcessError(result.returncode, command, output=result.stdout, stderr=result.stderr)
             else:
                 subprocess.run(["afplay", file_path], check=True)
         except subprocess.CalledProcessError as e:
-            log_planner_message(f"Erreur lors de la lecture pour {file_path}: {e}. Sortie: {e.stderr.decode().strip() if e.stderr else ''}")
+            log_planner_message(f"Erreur lors de la lecture pour {file_path}: {e}. Sortie: {e.stderr if e.stderr else ''}")
         except FileNotFoundError:
             if IS_RASPBERRY_PI:
                 log_planner_message("Erreur: 'mpv' n'est pas trouvé. Assurez-vous qu'il est installé sur le Pi avec 'sudo apt install mpv'.")
@@ -104,8 +108,8 @@ def main_loop():
         current_time = now.time()
         current_day = now.isoweekday()  # Lundi=1, Dimanche=7
 
-        # Recharger la programmation toutes les 5 minutes pour prendre en compte les changements
-        if now.minute % 5 == 0 and now.second == 0:
+        # Recharger la programmation toutes les 2 minutes pour prendre en compte les changements
+        if now.minute % 2 == 0 and now.second == 0:
             new_schedule = load_schedule()
             if new_schedule != schedule_list:
                 log_planner_message("Nouvelle programmation détectée, rechargement...")

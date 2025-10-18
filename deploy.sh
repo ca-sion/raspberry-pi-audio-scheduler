@@ -80,6 +80,7 @@ ExecStart=${PI_PROJECT_ROOT}/venv/bin/python3 ${PI_PROJECT_ROOT}/${PYTHON_SCRIPT
 WorkingDirectory=${PI_PROJECT_ROOT}
 Restart=always
 User=${RASPBERRY_PI_USER}
+EnvironmentFile=${PI_PROJECT_ROOT}/.env
 Environment=IS_RASPBERRY_PI=True
 Environment=FLASK_APP=${PI_PROJECT_ROOT}/api.py
 
@@ -100,6 +101,10 @@ echo "--- Démarrage du déploiement vers ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HO
 # 1. Créer les dossiers de destination sur le Raspberry Pi
 echo "--- 1. Création des dossiers de destination ---"
 ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/etc ${PI_PROJECT_ROOT}/audio ${PI_PROJECT_ROOT}/logs ${PI_PROJECT_ROOT}/static"
+
+# 1b. Vérification des permissions utilisateur pour l'audio
+echo "--- 1b. Vérification des permissions utilisateur pour l'audio ---"
+ssh_exec "sudo usermod -a -G audio,video ${RASPBERRY_PI_USER}"
 
 # 2. Copier les fichiers essentiels du projet
 echo "--- 2. Copie des fichiers du projet ---"
@@ -124,6 +129,11 @@ if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie de configure-ap.service. 
 # 5. Installation du lecteur audio (mpv)
 echo "--- 5. Installation du lecteur audio mpv ---"
 ssh_exec "sudo apt-get update && sudo apt-get install -y mpv"
+
+# 5b. Réglage du volume audio
+echo "--- 5b. Réglage du volume audio à 100% ---"
+ssh_exec "amixer sset 'Master' 100%"
+ssh_exec "sudo alsactl store"
 
 # 6. Configuration du point d'accès et installation de ses services
 echo "--- 6. Configuration du point d'accès Wi-Fi (hostapd, dnsmasq) ---"
