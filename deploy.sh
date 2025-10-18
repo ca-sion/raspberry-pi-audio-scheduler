@@ -18,6 +18,9 @@ set -o pipefail
 # --- Chemin du fichier .env local ---
 LOCAL_ENV_FILE=".env"
 
+# --- Chemin du projet local ---
+LOCAL_PROJECT_DIR=$(pwd)
+
 # --- Vérification et Chargement du fichier .env local ---
 if [ ! -f "$LOCAL_ENV_FILE" ]; then
     echo "ERREUR: Le fichier .env local n'a pas été trouvé à la racine du répertoire courant."
@@ -53,7 +56,6 @@ if [ -z "${AP_WIFI_PASSWORD+x}" ]; then echo "ERREUR: La variable AP_WIFI_PASSWO
 
 
 # --- Variables de configuration du projet ---
-LOCAL_PROJECT_DIR=$(pwd)
 RASPBERRY_PI_USER="${PI_USER}"
 RASPBERRY_PI_HOST="${PI_HOST}"
 PYTHON_DEPS="flask flask-cors python-dotenv"
