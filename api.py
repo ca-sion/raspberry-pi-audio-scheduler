@@ -48,7 +48,13 @@ AUDIO_FILES = {
     "ti": os.path.join(AUDIO_BASE_DIR, "long-ti.m4a"),
     "fa": os.path.join(AUDIO_BASE_DIR, "long-fa.mp3"),
     "fc_sion-fr": os.path.join(AUDIO_BASE_DIR, "fc_sion-fr.mp3"),
-    "fc_sion-de": os.path.join(AUDIO_BASE_DIR, "fc_sion-de.mp3")
+    "fc_sion-de": os.path.join(AUDIO_BASE_DIR, "fc_sion-de.mp3"),
+    "horn": os.path.join(AUDIO_BASE_DIR, "horn.mp3"),
+    "siren-alert": os.path.join(AUDIO_BASE_DIR, "siren-alert.mp3"),
+    "boat-horn": os.path.join(AUDIO_BASE_DIR, "boat-horn.mp3"),
+    "facility-siren": os.path.join(AUDIO_BASE_DIR, "facility-siren.mp3"),
+    "chime-alert": os.path.join(AUDIO_BASE_DIR, "chime-alert.mp3"),
+    "race-start-bip": os.path.join(AUDIO_BASE_DIR, "race-start-bip.mp3")
 }
 
 # Statut du lecteur automatique
