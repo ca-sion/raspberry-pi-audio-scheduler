@@ -164,6 +164,25 @@ create_systemd_service "${FLASK_SERVICE_NAME}" "Flask API for Audio Player" "api
 create_systemd_service "${AUDIO_PLAYER_SERVICE_NAME}" "Audio Player Scheduler" "audio_player.py" "${FLASK_SERVICE_NAME}.service"
 echo "   Services Flask et Audio Player créés/mis à jour."
 
+# 8b. Configuration de Logrotate
+echo "--- 8b. Configuration de Logrotate ---"
+ssh_exec "sudo apt-get update && sudo apt-get install -y logrotate"
+ssh_exec "sudo tee /etc/logrotate.d/raspberry-pi-audio-scheduler > /dev/null <<EOF
+${PI_PROJECT_ROOT}/logs/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0640 ${RASPBERRY_PI_USER} ${RASPBERRY_PI_USER}
+    # postrotate n'est pas nécessaire ici car Python rouvre le fichier à chaque écriture.
+}
+EOF
+"
+echo "   Configuration Logrotate pour les logs du projet appliquée."
+
+
 # 9. Démarrage des services
 echo "--- 9. Démarrage de tous les services ---"
 ssh_exec "sudo systemctl enable ${AP_SERVICE_NAME}"
