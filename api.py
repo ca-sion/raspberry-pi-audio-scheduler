@@ -142,7 +142,15 @@ def play_now(lang):
             global current_audio_process
             try:
                 if IS_RASPBERRY_PI:
-                    current_audio_process = subprocess.Popen(["mpv", "--ao=alsa", path])
+                    mpv_command = ["mpv"]
+                    audio_device = os.getenv('MPV_AUDIO_DEVICE')
+                    if audio_device:
+                        mpv_command.extend([f"--audio-device={audio_device}"])
+                    else:
+                        # Fallback to default alsa if not specified
+                        mpv_command.extend(["--ao=alsa"])
+                    mpv_command.append(path)
+                    current_audio_process = subprocess.Popen(mpv_command)
                 else:
                     current_audio_process = subprocess.Popen(["afplay", path]) 
                 current_audio_process.wait()

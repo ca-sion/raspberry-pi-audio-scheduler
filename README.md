@@ -154,22 +154,22 @@ Remplacez `<adresse_ip_du_pi>` par l'adresse IP réelle de votre Raspberry Pi.
   * **Vérifier le statut d'un service :**
     ```bash
     sudo systemctl status pi-audio-api.service
-    sudo systemctl status audio-player.service
+    sudo systemctl status pi-audio-player.service
     ```
   * **Voir les logs d'un service :**
     ```bash
     journalctl -u pi-audio-api.service -f # Pour les logs en temps réel de l'API
-    journalctl -u audio-player.service -f # Pour les logs en temps réel du planificateur
+    journalctl -u pi-audio-player.service -f # Pour les logs en temps réel du planificateur
     ```
   * **Redémarrer un service :**
     ```bash
     sudo systemctl restart pi-audio-api.service
-    sudo systemctl restart audio-player.service
+    sudo systemctl restart pi-audio-player.service
     ```
   * **Arrêter un service :**
     ```bash
     sudo systemctl stop pi-audio-api.service
-    sudo systemctl stop audio-player.service
+    sudo systemctl stop pi-audio-player.service
     ```
   * **Erreurs de permissions :** Si vous rencontrez des erreurs de permission (`Permission denied`), assurez-vous que l'utilisateur `pi` a les droits d'accès aux dossiers audio et logs. Le script de déploiement tente de les créer avec les droits appropriés.
 

@@ -103,8 +103,12 @@ ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/etc ${PI_PROJECT_ROOT}/audio ${PI_PROJECT_
 
 # 2. Copier les fichiers essentiels du projet
 echo "--- 2. Copie des fichiers du projet ---"
-scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/static/* ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
-if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers. Sortie."; exit 1; fi
+scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
+if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers de base. Sortie."; exit 1; fi
+
+echo "--- 2b. Copie des fichiers de l'interface web ---"
+scp -r ${LOCAL_PROJECT_DIR}/static/* ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/static/
+if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers statiques. Sortie."; exit 1; fi
 
 # 3. Copier les scripts de configuration
 echo "--- 3. Copie des scripts de configuration ---"
@@ -138,19 +142,24 @@ ssh_exec "
 "
 echo "   Dépendances Python installées dans l'environnement virtuel."
 
-# 8. Création et redémarrage des services Systemd
-echo "--- 8. Création et redémarrage des services Systemd ---"
-create_systemd_service "${FLASK_SERVICE_NAME}" "Flask API for Audio Player" "api.py" "${AP_SERVICE_NAME}"
-create_systemd_service "${AUDIO_PLAYER_SERVICE_NAME}" "Audio Player Scheduler" "audio_player.py" "${FLASK_SERVICE_NAME}"
-echo "   Services Flask et Audio Player créés/mis à jour."
-
-# 9. Nettoyage et finalisation
-echo "--- 9. Nettoyage et finalisation ---"
+# 8. Installation et création des services Systemd
+echo "--- 8. Installation et création des services Systemd ---"
+# Installer d'abord le service de configuration de l'AP pour résoudre les dépendances
 ssh_exec "sudo mv ${PI_PROJECT_ROOT}/etc/configure-ap.service /etc/systemd/system/${AP_SERVICE_NAME}.service"
 ssh_exec "sudo systemctl daemon-reload"
+
+# Créer les autres services qui en dépendent
+# Note: Le .service est ajouté pour la clarté de la dépendance dans systemd
+create_systemd_service "${FLASK_SERVICE_NAME}" "Flask API for Audio Player" "api.py" "${AP_SERVICE_NAME}.service"
+create_systemd_service "${AUDIO_PLAYER_SERVICE_NAME}" "Audio Player Scheduler" "audio_player.py" "${FLASK_SERVICE_NAME}.service"
+echo "   Services Flask et Audio Player créés/mis à jour."
+
+# 9. Démarrage des services
+echo "--- 9. Démarrage de tous les services ---"
 ssh_exec "sudo systemctl enable ${AP_SERVICE_NAME}"
 ssh_exec "sudo systemctl start ${AP_SERVICE_NAME}"
-echo "   Service de configuration du point d'accès démarré."
+# Les autres services sont déjà redémarrés par la fonction create_systemd_service
+echo "   Services démarrés."
 
 echo ""
 echo "==================================================================="

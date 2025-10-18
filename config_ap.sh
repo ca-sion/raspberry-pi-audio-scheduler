@@ -52,6 +52,7 @@ ip a add $AP_IP/24 dev $WLAN_INTERFACE
 # 4. Configuration de hostapd
 echo "--- Écriture du fichier /etc/hostapd/hostapd.conf ---"
 cat > /etc/hostapd/hostapd.conf <<EOF
+country_code=CH
 interface=$WLAN_INTERFACE
 ssid=$AP_SSID
 hw_mode=g
