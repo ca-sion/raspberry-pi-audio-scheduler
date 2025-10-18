@@ -99,11 +99,11 @@ echo "--- Démarrage du déploiement vers ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HO
 
 # 1. Créer les dossiers de destination sur le Raspberry Pi
 echo "--- 1. Création des dossiers de destination ---"
-ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/etc ${PI_PROJECT_ROOT}/audio ${PI_PROJECT_ROOT}/logs"
+ssh_exec "mkdir -p ${PI_PROJECT_ROOT}/etc ${PI_PROJECT_ROOT}/audio ${PI_PROJECT_ROOT}/logs ${PI_PROJECT_ROOT}/static"
 
 # 2. Copier les fichiers essentiels du projet
 echo "--- 2. Copie des fichiers du projet ---"
-scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/*.html ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
+scp -r ${LOCAL_PROJECT_DIR}/.env ${LOCAL_PROJECT_DIR}/*.py ${LOCAL_PROJECT_DIR}/static/* ${LOCAL_PROJECT_DIR}/audio/ ${RASPBERRY_PI_USER}@${RASPBERRY_PI_HOST}:${PI_PROJECT_ROOT}/
 if [ $? -ne 0 ]; then echo "Erreur: Échec de la copie des fichiers. Sortie."; exit 1; fi
 
 # 3. Copier les scripts de configuration
